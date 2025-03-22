@@ -6,7 +6,7 @@ require (
 	github.com/MrAlias/flow v0.1.5
 	github.com/gin-gonic/contrib 93b827325fec
 	github.com/gin-gonic/gin v1.9.0
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.4.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/swaggo/files v1.0.1
