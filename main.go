@@ -34,6 +34,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/zapr"
@@ -113,35 +114,17 @@ func main() {
 		}
 	}()
 
-	// Start namespaced
-	namespace := ""
-
-	if namespaced {
-		_, span := tracer.Start(context.Background(), "main.loadNamespace")
-		// try to read the namespace from /var/run
-		namespaceByte, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-		if err != nil {
-			span.RecordError(err)
-			otelzap.L().Sugar().Errorw("Error shutting down tracer provider",
-				zap.Error(err),
-			)
-			os.Exit(1)
-		}
-		span.End()
-		namespace = string(namespaceByte)
-	}
-
 	_, span := tracer.Start(context.Background(), "main.startManager")
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                        scheme,
-		MetricsBindAddress:            metricsAddr,
-		Port:                          9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: bindAddr,
+		},
 		HealthProbeBindAddress:        probeAddr,
 		LeaderElection:                false,
 		LeaderElectionID:              "a9a252fc.cedi.dev",
 		LeaderElectionReleaseOnCancel: false,
-		Namespace:                     string(namespace),
 	})
 
 	if err != nil {
