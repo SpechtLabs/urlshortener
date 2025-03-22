@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/MrAlias/flow v0.1.5
 	github.com/gin-gonic/contrib v0.0.0-20221130124618-7e01895a63f2
-	github.com/gin-gonic/gin v1.9.0
+	github.com/gin-gonic/gin v1.9.1
 	github.com/go-logr/logr v1.2.4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
