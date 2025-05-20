@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/MrAlias/flow v0.1.5
 	github.com/gin-gonic/contrib v0.0.0-20250113154928-93b827325fec
-	github.com/gin-gonic/gin v1.10.0
+	github.com/gin-gonic/gin v1.10.1
 	github.com/go-logr/zapr v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.21.1
