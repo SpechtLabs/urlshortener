@@ -46,7 +46,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/controller.ShortLink"
+                                "$ref": "#/definitions/api.ShortLink"
                             }
                         }
                     },
@@ -100,7 +100,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Success",
                         "schema": {
-                            "$ref": "#/definitions/controller.ShortLink"
+                            "$ref": "#/definitions/api.ShortLink"
                         }
                     },
                     "401": {
@@ -418,7 +418,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "controller.ShortLink": {
+        "api.ShortLink": {
             "type": "object",
             "properties": {
                 "name": {

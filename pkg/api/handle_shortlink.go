@@ -1,19 +1,18 @@
-package controller
+package api
 
 import (
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/cedi/urlshortener/pkg/observability"
 	"github.com/gin-gonic/gin"
-	"github.com/uptrace/opentelemetry-go-extra/otelzap"
+	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
-// HandleShortlink handles the shortlink and redirects according to the configuration
+// HandleShortLink handles the shortlink and redirects according to the configuration
 // @BasePath /
 // @Summary       redirect to target
 // @Schemes       http https
@@ -33,7 +32,7 @@ import (
 // @Failure       500         {object}  int     "InternalServerError"
 // @Tags default
 // @Router /{shortlink} [get]
-func (s *ShortlinkController) HandleShortLink(ct *gin.Context) {
+func (s *UrlshortenerServer) HandleShortLink(ct *gin.Context) {
 	shortlinkName := ct.Param("shortlink")
 
 	ctx := ct.Request.Context()
@@ -50,21 +49,25 @@ func (s *ShortlinkController) HandleShortLink(ct *gin.Context) {
 		attribute.String("referrer", ct.Request.Referer()),
 	)
 
-	log := otelzap.L().Sugar().With(zap.String("shortlink", shortlinkName),
-		zap.String("operation", "shortlink"),
-	)
-
 	ct.Header("Cache-Control", "public, max-age=900, stale-if-error=3600") // max-age = 15min; stale-if-error = 1h
 
 	shortlink, err := s.client.Get(ctx, shortlinkName)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			observability.RecordError(ctx, span, log, err, "Path not found")
+			otelzap.L().WithError(err).Ctx(ctx).Error("Path not found",
+				zap.String("shortlink", shortlinkName),
+				zap.String("operation", "shortlink"),
+			)
+
 			span.SetAttributes(attribute.String("path", ct.Request.URL.Path))
 
 			ct.HTML(http.StatusNotFound, "404.html", gin.H{})
 		} else {
-			observability.RecordError(ctx, span, log, err, "Failed to get ShortLink")
+			otelzap.L().WithError(err).Ctx(ctx).Error("Failed to get ShortLink",
+				zap.String("shortlink", shortlinkName),
+				zap.String("operation", "shortlink"),
+			)
+
 			ct.HTML(http.StatusInternalServerError, "500.html", gin.H{})
 		}
 		return
@@ -104,5 +107,7 @@ func (s *ShortlinkController) HandleShortLink(ct *gin.Context) {
 	}
 
 	// Increase hit counter
-	s.client.IncrementInvocationCount(ct, shortlink)
+	if err := s.client.IncrementInvocationCount(ct, shortlink); err != nil {
+		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to increment invocation count")
+	}
 }

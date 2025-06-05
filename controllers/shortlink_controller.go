@@ -1,19 +1,3 @@
-/*
-Copyright 2022.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controllers
 
 import (
@@ -28,10 +12,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	v1alpha1 "github.com/cedi/urlshortener/api/v1alpha1"
+	"github.com/cedi/urlshortener/api/v1alpha1"
 	shortlinkclient "github.com/cedi/urlshortener/pkg/client"
-	"github.com/cedi/urlshortener/pkg/observability"
-	"github.com/uptrace/opentelemetry-go-extra/otelzap"
+	"github.com/spechtlabs/go-otel-utils/otelzap"
 )
 
 // ShortLinkReconciler reconciles a ShortLink object
@@ -75,15 +58,19 @@ func (r *ShortLinkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	span.SetAttributes(attribute.String("shortlink", req.Name))
 
-	log := otelzap.L().Sugar().With(zap.String("name", "reconciler"), zap.String("shortlink", req.NamespacedName.String()))
-
 	// Get ShortLink from etcd
 	shortlink, err := r.client.GetNamespaced(ctx, req.NamespacedName)
 	if err != nil || shortlink == nil {
 		if errors.IsNotFound(err) {
-			observability.RecordInfo(ctx, span, log, "Shortlink resource not found. Ignoring since object must be deleted")
+			otelzap.L().WithError(err).Ctx(ctx).Info("Shortlink resource not found. Ignoring since object must be deleted",
+				zap.String("name", "reconciler"),
+				zap.String("shortlink", req.String()),
+			)
 		} else {
-			observability.RecordError(ctx, span, log, err, "Failed to fetch ShortLink resource")
+			otelzap.L().WithError(err).Ctx(ctx).Error("Failed to fetch ShortLink resource",
+				zap.String("name", "reconciler"),
+				zap.String("shortlink", req.String()),
+			)
 		}
 	}
 
@@ -92,8 +79,8 @@ func (r *ShortLinkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		for _, shortlink := range shortlinkList.Items {
 			shortlinkInvocations.WithLabelValues(
-				shortlink.ObjectMeta.Name,
-				shortlink.ObjectMeta.Namespace,
+				shortlink.Name,
+				shortlink.Namespace,
 			).Set(float64(shortlink.Status.Count))
 		}
 	}
@@ -101,7 +88,7 @@ func (r *ShortLinkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// SetupWithManager sets up the api with the Manager.
 func (r *ShortLinkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ShortLink{}).

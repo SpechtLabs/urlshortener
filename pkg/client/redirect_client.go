@@ -50,7 +50,7 @@ func (c *RedirectClient) GetNameNamespace(ct context.Context, name, namespace st
 	return c.GetNamespaced(ctx, types.NamespacedName{Name: name, Namespace: namespace})
 }
 
-// Get returns a Redirect
+// GetNamespaced returns a Redirect
 func (c *RedirectClient) GetNamespaced(ct context.Context, nameNamespaced types.NamespacedName) (*v1alpha1.Redirect, error) {
 	ctx, span := c.tracer.Start(
 		ct,
@@ -73,7 +73,7 @@ func (c *RedirectClient) GetNamespaced(ct context.Context, nameNamespaced types.
 	return Redirect, nil
 }
 
-// List returns a list of all Redirect
+// ListAll returns a list of all Redirect
 func (c *RedirectClient) ListAll(ct context.Context) (*v1alpha1.RedirectList, error) {
 	ctx, span := c.tracer.Start(ct, "RedirectClient.List")
 	defer span.End()
@@ -153,7 +153,7 @@ func (c *RedirectClient) Query(ct context.Context, label string) (*v1alpha1.Redi
 }
 
 func (c *RedirectClient) Save(ct context.Context, Redirect *v1alpha1.Redirect) error {
-	ctx, span := c.tracer.Start(ct, "RedirectClient.Save", trace.WithAttributes(attribute.String("Redirect", Redirect.ObjectMeta.Name), attribute.String("namespace", Redirect.ObjectMeta.Namespace)))
+	ctx, span := c.tracer.Start(ct, "RedirectClient.Save", trace.WithAttributes(attribute.String("Redirect", Redirect.Name), attribute.String("namespace", Redirect.Namespace)))
 	defer span.End()
 
 	err := c.client.Update(ctx, Redirect)
@@ -165,7 +165,7 @@ func (c *RedirectClient) Save(ct context.Context, Redirect *v1alpha1.Redirect) e
 }
 
 func (c *RedirectClient) SaveStatus(ct context.Context, Redirect *v1alpha1.Redirect) error {
-	ctx, span := c.tracer.Start(ct, "RedirectClient.SaveStatus", trace.WithAttributes(attribute.String("Redirect", Redirect.ObjectMeta.Name), attribute.String("namespace", Redirect.ObjectMeta.Namespace)))
+	ctx, span := c.tracer.Start(ct, "RedirectClient.SaveStatus", trace.WithAttributes(attribute.String("Redirect", Redirect.Name), attribute.String("namespace", Redirect.Namespace)))
 	defer span.End()
 
 	err := c.client.Status().Update(ctx, Redirect)

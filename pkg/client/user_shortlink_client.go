@@ -5,26 +5,27 @@ import (
 
 	"github.com/cedi/urlshortener/api/v1alpha1"
 	"github.com/cedi/urlshortener/pkg/model"
+	"go.opentelemetry.io/otel"
 
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
-type ShortlinkClientAuth struct {
+type UserShortLinkClient struct {
 	tracer trace.Tracer
 	client *ShortlinkClient
 }
 
-func NewAuthenticatedShortlinkClient(tracer trace.Tracer, client *ShortlinkClient) *ShortlinkClientAuth {
-	return &ShortlinkClientAuth{
-		tracer: tracer,
+func NewUserShortLinkClient(client *ShortlinkClient) *UserShortLinkClient {
+	return &UserShortLinkClient{
+		tracer: otel.Tracer("urlshortener"),
 		client: client,
 	}
 }
 
-func (c *ShortlinkClientAuth) List(ct context.Context, username string) (*v1alpha1.ShortLinkList, error) {
-	ctx, span := c.tracer.Start(ct, "ShortlinkClientAuth.List")
+func (c *UserShortLinkClient) List(ct context.Context, username string) (*v1alpha1.ShortLinkList, error) {
+	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.List")
 	defer span.End()
 
 	span.SetAttributes(attribute.String("username", username))
@@ -49,8 +50,8 @@ func (c *ShortlinkClientAuth) List(ct context.Context, username string) (*v1alph
 	return &userShortlinkList, nil
 }
 
-func (c *ShortlinkClientAuth) Get(ct context.Context, username string, name string) (*v1alpha1.ShortLink, error) {
-	ctx, span := c.tracer.Start(ct, "ShortlinkClientAuth.Get")
+func (c *UserShortLinkClient) Get(ct context.Context, username string, name string) (*v1alpha1.ShortLink, error) {
+	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Get")
 	defer span.End()
 
 	span.SetAttributes(attribute.String("username", username))
@@ -67,8 +68,8 @@ func (c *ShortlinkClientAuth) Get(ct context.Context, username string, name stri
 	return shortLink, nil
 }
 
-func (c *ShortlinkClientAuth) Create(ct context.Context, username string, shortLink *v1alpha1.ShortLink) error {
-	ctx, span := c.tracer.Start(ct, "ShortlinkClientAuth.Create")
+func (c *UserShortLinkClient) Create(ct context.Context, username string, shortLink *v1alpha1.ShortLink) error {
+	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Create")
 	defer span.End()
 
 	span.SetAttributes(attribute.String("username", username))
@@ -77,8 +78,8 @@ func (c *ShortlinkClientAuth) Create(ct context.Context, username string, shortL
 	return c.client.Create(ctx, shortLink)
 }
 
-func (c *ShortlinkClientAuth) Update(ct context.Context, username string, shortLink *v1alpha1.ShortLink) error {
-	ctx, span := c.tracer.Start(ct, "ShortlinkClientAuth.Update")
+func (c *UserShortLinkClient) Update(ct context.Context, username string, shortLink *v1alpha1.ShortLink) error {
+	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Update")
 	defer span.End()
 
 	span.SetAttributes(attribute.String("username", username))
@@ -95,8 +96,8 @@ func (c *ShortlinkClientAuth) Update(ct context.Context, username string, shortL
 	return c.client.UpdateStatus(ctx, shortLink)
 }
 
-func (c *ShortlinkClientAuth) Delete(ct context.Context, username string, shortLink *v1alpha1.ShortLink) error {
-	ctx, span := c.tracer.Start(ct, "ShortlinkClientAuth.Update")
+func (c *UserShortLinkClient) Delete(ct context.Context, username string, shortLink *v1alpha1.ShortLink) error {
+	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Update")
 	defer span.End()
 
 	span.SetAttributes(attribute.String("username", username))

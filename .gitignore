@@ -1,96 +1,166 @@
-# Created by https://www.toptal.com/developers/gitignore/api/go,visualstudiocode,vim,helm
-# Edit at https://www.toptal.com/developers/gitignore?templates=go,visualstudiocode,vim,helm
 
-### Go ###
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
-go.work
-
-### Go Patch ###
-/vendor/
-/Godeps/
-
-### Helm ###
-# Chart dependencies
-**/charts/*.tgz
-
-### Vim ###
-# Swap
+!.idea/codeStyles
+!.idea/runConfigurations
+!.vscode/*.code-snippets
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+._*
+.$*.drawio.bkp
+.$*.drawio.dtmp
+.apdisk
+.AppleDB
+.AppleDesktop
+.AppleDouble
+.cache
+.cache/
+.com.apple.timemachine.donotpresent
+.DocumentRevisions-V100
+.docusaurus
+.DS_Store
+.dynamodb/
+.env
+.env.development.local
+.env.local
+.env.production.local
+.env.test.local
+.eslintcache
+.fseventsd
+.fusebox/
+.grunt
+.history
+.history/
+.idea_modules/
+.idea/*
+.idea/**/aws.xml
+.idea/**/azureSettings.xml
+.idea/**/contentModel.xml
+.idea/**/dataSources.ids
+.idea/**/dataSources.local.xml
+.idea/**/dataSources/
+.idea/**/dbnavigator.xml
+.idea/**/dictionaries
+.idea/**/dynamic.xml
+.idea/**/gradle.xml
+.idea/**/libraries
+.idea/**/markdown-navigator-enh.xml
+.idea/**/markdown-navigator.xml
+.idea/**/markdown-navigator/
+.idea/**/mongoSettings.xml
+.idea/**/shelf
+.idea/**/sonarIssues.xml
+.idea/**/sonarlint/
+.idea/**/sqlDataSources.xml
+.idea/**/tasks.xml
+.idea/**/uiDesigner.xml
+.idea/**/usage.statistics.xml
+.idea/**/workspace.xml
+.idea/$CACHE_FILE$
+.idea/caches/build_file_checksums.ser
+.idea/codestream.xml
+.idea/httpRequests
+.idea/replstate.xml
+.idea/sonarlint/
+.ionide
+.lock-wscript
+.LSOverride
+.netrwhist
+.next
+.node_repl_history
+.npm
+.nuxt
+.nyc_output
+.parcel-cache
+.pnp.*
+.pnpm-debug.log*
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.serverless/
+.Spotlight-V100
+.stylelintcache
+.svelte-kit
+.temp
+.TemporaryItems
+.tern-port
+.Trashes
+.VolumeIcon.icns
+.vscode-test
+.vscode/*
+.vscode/*.code-snippets
+.vuepress/dist
+.webpack/
+.yarn-integrity
+.yarn/build-state.yml
+.yarn/cache
+.yarn/install-state.gz
+.yarn/unplugged
 [._]*.s[a-v][a-z]
-!*.svg  # comment out if you don't need vector files
 [._]*.sw[a-p]
+[._]*.un~
 [._]s[a-rt-v][a-z]
 [._]ss[a-gi-z]
 [._]sw[a-p]
-
-# Session
+*.code-workspace
+*.dll
+*.dylib
+*.exe
+*.exe~
+*.icloud
+*.iws
+*.lcov
+*.log
+*.out
+*.pid
+*.pid.lock
+*.seed
+*.so
+*.test
+*.tgz
+*.tsbuildinfo
+*.vsix
+**/charts/*.tgz
+*~
+/Godeps/
+/vendor/
+atlassian-ide-plugin.xml
+bin
+bower_components
+build
+build/
+build/Release
+cmake-build-*/
+com_crashlytics_export_strings.xml
+coverage
+crashlytics-build.properties
+crashlytics.properties
+dist
+dist/
+fabric.properties
+go.work
+Icon
+jspm_packages/
+lerna-debug.log*
+lib-cov
+logs
+main
+Network Trash Folder
+node_modules/
+npm-debug.log
+npm-debug.log*
+out
+out/
+pids
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 Session.vim
 Sessionx.vim
-
-# Temporary
-.netrwhist
-*~
-# Auto-generated tag files
 tags
-# Persistent undo
-[._]*.un~
-
-### VisualStudioCode ###
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
-
-# Local History for Visual Studio Code
-.history/
-
-# Built Visual Studio Code Extensions
-*.vsix
-
-### VisualStudioCode Patch ###
-# Ignore all local history of files
-.history
-.ionide
-
-# Support for Project snippet scope
-.vscode/*.code-snippets
-
-# Ignore code-workspaces
-*.code-workspace
-
-# End of https://www.toptal.com/developers/gitignore/api/go,visualstudiocode,vim,helm
-
-# drawio temp files
-.$*.drawio.bkp
-.$*.drawio.dtmp
-
-# build directory
-build/
 template
-build
-bin
-
-*.out
+Temporary Items
 urlshortener
-.DS_Store
-main
+web_modules/
+yarn-debug.log*
+yarn-error.log
+yarn-error.log*

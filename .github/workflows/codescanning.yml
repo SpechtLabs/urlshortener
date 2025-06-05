@@ -2,9 +2,11 @@ name: "Code Scanning - Action"
 
 on:
   push:
-    branches: [main]
-  #  pull_request:
-  #    branches: [main]
+    branches:
+      - main
+    pull_request:
+      branches:
+        - main
   schedule:
     #        ┌───────────── minute (0 - 59)
     #        │  ┌───────────── hour (0 - 23)
@@ -32,13 +34,17 @@ jobs:
       contents: read
 
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.18
-
+      # Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Set up Go environment
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: "*.sum"
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
@@ -49,3 +55,6 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@v4

@@ -6,13 +6,16 @@ import (
 	"strings"
 
 	"github.com/cedi/urlshortener/api/v1alpha1"
+	"github.com/spechtlabs/go-otel-utils/otelzap"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// NewRedirectIngress takes an existing ingress and updates it, or creates an entirely new *networkingv1.Ingress object
-func NewRedirectIngress(ing *networkingv1.Ingress, redirect *v1alpha1.Redirect) *networkingv1.Ingress {
+// UpdateRedirectIngress takes an existing ingress and updates it, or creates an entirely new *networkingv1.Ingress object
+func UpdateRedirectIngress(ing *networkingv1.Ingress, redirect *v1alpha1.Redirect, scheme *runtime.Scheme) *networkingv1.Ingress {
 	pathTypePrefix := networkingv1.PathTypePrefix
 
 	if ing == nil {
@@ -57,7 +60,7 @@ func NewRedirectIngress(ing *networkingv1.Ingress, redirect *v1alpha1.Redirect) 
 		},
 	}
 
-	if redirect.Spec.TLS.Enable == true {
+	if redirect.Spec.TLS.Enable {
 		ing.Spec.TLS = []networkingv1.IngressTLS{
 			{
 				Hosts:      []string{redirect.Spec.Source},
@@ -67,8 +70,13 @@ func NewRedirectIngress(ing *networkingv1.Ingress, redirect *v1alpha1.Redirect) 
 
 		// Add additional annotations based from our TLS spec
 		for annotationKey, annotationValue := range redirect.Spec.TLS.Annotations {
-			ing.ObjectMeta.Annotations[annotationKey] = annotationValue
+			ing.Annotations[annotationKey] = annotationValue
 		}
+	}
+
+	// Set Redirect instance as the owner and api
+	if err := ctrl.SetControllerReference(redirect, ing, scheme); err != nil {
+		otelzap.L().WithError(err).Error("Failed to set controller reference")
 	}
 
 	return ing
@@ -86,7 +94,7 @@ func GetIngressNames(ingresses []networkingv1.Ingress) []string {
 	var ingressNames []string
 
 	for _, ingress := range ingresses {
-		ingressNames = append(ingressNames, ingress.ObjectMeta.Name)
+		ingressNames = append(ingressNames, ingress.Name)
 	}
 
 	return ingressNames
