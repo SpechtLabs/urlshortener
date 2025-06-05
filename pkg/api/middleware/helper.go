@@ -1,15 +1,27 @@
 package middleware
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
 	"github.com/sierrasoftworks/humane-errors-go"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+type GithubUser struct {
+	Id        int    `json:"id,omitempty"`
+	Login     string `json:"login,omitempty"`
+	AvatarUrl string `json:"avatar_url,omitempty"`
+	Type      string `json:"type,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Email     string `json:"email,omitempty"`
+}
 
 func extractBearerToken(c *gin.Context) (string, humane.Error) {
 	authHeader := c.GetHeader("Authorization")
