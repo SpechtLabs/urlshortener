@@ -50,9 +50,7 @@ import (
 )
 
 var (
-	scheme         = runtime.NewScheme()
-	serviceVersion = "1.0.0"
-	serviceName    = "urlshortener"
+	scheme = runtime.NewScheme()
 )
 
 func init() {

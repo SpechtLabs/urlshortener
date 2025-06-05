@@ -64,12 +64,12 @@ func (r *ShortLinkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if errors.IsNotFound(err) {
 			otelzap.L().WithError(err).Ctx(ctx).Info("Shortlink resource not found. Ignoring since object must be deleted",
 				zap.String("name", "reconciler"),
-				zap.String("shortlink", req.NamespacedName.String()),
+				zap.String("shortlink", req.String()),
 			)
 		} else {
 			otelzap.L().WithError(err).Ctx(ctx).Error("Failed to fetch ShortLink resource",
 				zap.String("name", "reconciler"),
-				zap.String("shortlink", req.NamespacedName.String()),
+				zap.String("shortlink", req.String()),
 			)
 		}
 	}
@@ -79,8 +79,8 @@ func (r *ShortLinkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		for _, shortlink := range shortlinkList.Items {
 			shortlinkInvocations.WithLabelValues(
-				shortlink.ObjectMeta.Name,
-				shortlink.ObjectMeta.Namespace,
+				shortlink.Name,
+				shortlink.Namespace,
 			).Set(float64(shortlink.Status.Count))
 		}
 	}

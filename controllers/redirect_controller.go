@@ -82,7 +82,7 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		defer span.End()
 	}
 
-	span.SetAttributes(attribute.String("redirect", req.NamespacedName.String()))
+	span.SetAttributes(attribute.String("redirect", req.String()))
 
 	// Monitor the number of redirects
 	if redirectList, err := r.rClient.List(ctx); redirectList != nil && err == nil {
@@ -95,7 +95,7 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if k8serrors.IsNotFound(err) {
 			otelzap.L().WithError(err).Ctx(ctx).Info("Redirect resource not found. Ignoring since object must be deleted",
 				zap.String("name", "reconciler"),
-				zap.String("redirect", req.NamespacedName.String()),
+				zap.String("redirect", req.String()),
 			)
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
@@ -106,7 +106,7 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Error reading the object - requeue the request.
 		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to fetch Redirect resource",
 			zap.String("name", "reconciler"),
-			zap.String("redirect", req.NamespacedName.String()),
+			zap.String("redirect", req.String()),
 		)
 		return ctrl.Result{}, err
 	}
@@ -116,7 +116,7 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to upsert redirect ingress",
 			zap.String("name", "reconciler"),
-			zap.String("redirect", req.NamespacedName.String()),
+			zap.String("redirect", req.String()),
 		)
 	}
 
@@ -130,19 +130,19 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err = r.client.List(ctx, ingressList, listOpts...); err != nil {
 		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to list ingresses",
 			zap.String("name", "reconciler"),
-			zap.String("redirect", req.NamespacedName.String()),
+			zap.String("redirect", req.String()),
 		)
 		return ctrl.Result{}, err
 	}
 
 	// Update status.Nodes if needed
 	redirect.Status.IngressName = redirectpkg.GetIngressNames(ingressList.Items)
-	redirect.Status.Target = ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/permanent-redirect"]
+	redirect.Status.Target = ingress.Annotations["nginx.ingress.kubernetes.io/permanent-redirect"]
 	err = r.client.Status().Update(ctx, redirect)
 	if err != nil {
 		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to update Redirect status",
 			zap.String("name", "reconciler"),
-			zap.String("redirect", req.NamespacedName.String()),
+			zap.String("redirect", req.String()),
 		)
 		return ctrl.Result{}, err
 	}

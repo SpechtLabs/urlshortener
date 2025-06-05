@@ -65,7 +65,7 @@ func (s *UrlshortenerServer) HandleListShortLink(ct *gin.Context) {
 
 	for idx, shortlink := range shortlinkList.Items {
 		targetList[idx] = ShortLink{
-			Name:   shortlink.ObjectMeta.Name,
+			Name:   shortlink.Name,
 			Spec:   shortlink.Spec,
 			Status: shortlink.Status,
 		}

@@ -60,7 +60,9 @@ func getGitHubUserInfo(c context.Context, bearerToken string) (*GithubUser, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to fetch UserInfo from GitHub API")
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	// If request was unsuccessful, we error out
 	if resp.StatusCode != 200 {

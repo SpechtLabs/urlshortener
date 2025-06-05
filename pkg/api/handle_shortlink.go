@@ -107,5 +107,7 @@ func (s *UrlshortenerServer) HandleShortLink(ct *gin.Context) {
 	}
 
 	// Increase hit counter
-	s.client.IncrementInvocationCount(ct, shortlink)
+	if err := s.client.IncrementInvocationCount(ct, shortlink); err != nil {
+		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to increment invocation count")
+	}
 }

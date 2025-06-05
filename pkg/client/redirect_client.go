@@ -153,7 +153,7 @@ func (c *RedirectClient) Query(ct context.Context, label string) (*v1alpha1.Redi
 }
 
 func (c *RedirectClient) Save(ct context.Context, Redirect *v1alpha1.Redirect) error {
-	ctx, span := c.tracer.Start(ct, "RedirectClient.Save", trace.WithAttributes(attribute.String("Redirect", Redirect.ObjectMeta.Name), attribute.String("namespace", Redirect.ObjectMeta.Namespace)))
+	ctx, span := c.tracer.Start(ct, "RedirectClient.Save", trace.WithAttributes(attribute.String("Redirect", Redirect.Name), attribute.String("namespace", Redirect.Namespace)))
 	defer span.End()
 
 	err := c.client.Update(ctx, Redirect)
@@ -165,7 +165,7 @@ func (c *RedirectClient) Save(ct context.Context, Redirect *v1alpha1.Redirect) e
 }
 
 func (c *RedirectClient) SaveStatus(ct context.Context, Redirect *v1alpha1.Redirect) error {
-	ctx, span := c.tracer.Start(ct, "RedirectClient.SaveStatus", trace.WithAttributes(attribute.String("Redirect", Redirect.ObjectMeta.Name), attribute.String("namespace", Redirect.ObjectMeta.Namespace)))
+	ctx, span := c.tracer.Start(ct, "RedirectClient.SaveStatus", trace.WithAttributes(attribute.String("Redirect", Redirect.Name), attribute.String("namespace", Redirect.Namespace)))
 	defer span.End()
 
 	err := c.client.Status().Update(ctx, Redirect)

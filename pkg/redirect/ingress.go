@@ -60,7 +60,7 @@ func UpdateRedirectIngress(ing *networkingv1.Ingress, redirect *v1alpha1.Redirec
 		},
 	}
 
-	if redirect.Spec.TLS.Enable == true {
+	if redirect.Spec.TLS.Enable {
 		ing.Spec.TLS = []networkingv1.IngressTLS{
 			{
 				Hosts:      []string{redirect.Spec.Source},
@@ -70,7 +70,7 @@ func UpdateRedirectIngress(ing *networkingv1.Ingress, redirect *v1alpha1.Redirec
 
 		// Add additional annotations based from our TLS spec
 		for annotationKey, annotationValue := range redirect.Spec.TLS.Annotations {
-			ing.ObjectMeta.Annotations[annotationKey] = annotationValue
+			ing.Annotations[annotationKey] = annotationValue
 		}
 	}
 
@@ -94,7 +94,7 @@ func GetIngressNames(ingresses []networkingv1.Ingress) []string {
 	var ingressNames []string
 
 	for _, ingress := range ingresses {
-		ingressNames = append(ingressNames, ingress.ObjectMeta.Name)
+		ingressNames = append(ingressNames, ingress.Name)
 	}
 
 	return ingressNames
