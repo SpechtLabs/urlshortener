@@ -36,7 +36,7 @@ patchesStrategicMerge:
   # endpoint w/o any authn/z, please comment the following line.
   - urlshortener_auth_proxy_patch.yaml
 
-# Mount the controller config file for loading urlshortener configurations
+# Mount the api config file for loading urlshortener configurations
 # through a ComponentConfig type
 #- urlshortener_config_patch.yaml
 

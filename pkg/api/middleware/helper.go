@@ -1,52 +1,32 @@
-package controller
+package middleware
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
-	"github.com/cedi/urlshortener/api/v1alpha1"
 	"github.com/gin-gonic/gin"
-	"github.com/pkg/errors"
+	"github.com/sierrasoftworks/humane-errors-go"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-const (
-	ContentTypeApplicationJSON = "application/json"
-	ContentTypeTextPlain       = "text/plain"
-)
-
-type ShortLink struct {
-	Name   string                   `json:"name"`
-	Spec   v1alpha1.ShortLinkSpec   `json:"spec,omitempty"`
-	Status v1alpha1.ShortLinkStatus `json:"status,omitempty"`
-}
-
-type JsonReturnError struct {
-	Code  int    `json:"code"`
-	Error string `json:"error"`
-}
-
-type GithubUser struct {
-	Id         int    `json:"id,omitempty"`
-	Login      string `json:"login,omitempty"`
-	Avatar_url string `json:"avatar_url,omitempty"`
-	Type       string `json:"type,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Email      string `json:"email,omitempty"`
-}
-
-func ginReturnError(c *gin.Context, statusCode int, contentType string, err string) {
-	if contentType == ContentTypeTextPlain {
-		c.Data(statusCode, contentType, []byte(err))
-	} else if contentType == ContentTypeApplicationJSON {
-		c.JSON(statusCode, JsonReturnError{
-			Code:  statusCode,
-			Error: err,
-		})
+func extractBearerToken(c *gin.Context) (string, humane.Error) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		return "", humane.New("Missing Authorization header",
+			"ensure you include a Bearer token in the Authorization header, e.g. Authorization: Bearer <token> or Authorization: token <token>",
+		)
 	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return "", humane.New("Invalid Authorization header format",
+			"ensure you include a Bearer token in the Authorization header, e.g. Authorization: Bearer <token> or Authorization: token <token>",
+		)
+	}
+
+	return parts[1], nil
 }
 
 func getGitHubUserInfo(c context.Context, bearerToken string) (*GithubUser, error) {

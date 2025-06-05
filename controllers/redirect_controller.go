@@ -32,10 +32,9 @@ import (
 
 	urlshortenerv1alpha1 "github.com/cedi/urlshortener/api/v1alpha1"
 	redirectclient "github.com/cedi/urlshortener/pkg/client"
-	"github.com/cedi/urlshortener/pkg/observability"
 	redirectpkg "github.com/cedi/urlshortener/pkg/redirect"
 	"github.com/pkg/errors"
-	"github.com/uptrace/opentelemetry-go-extra/otelzap"
+	"github.com/spechtlabs/go-otel-utils/otelzap"
 )
 
 // RedirectReconciler reconciles a Redirect object
@@ -85,8 +84,6 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	span.SetAttributes(attribute.String("redirect", req.NamespacedName.String()))
 
-	log := otelzap.L().Sugar().With(zap.String("name", "reconciler"), zap.String("redirect", req.NamespacedName.String()))
-
 	// Monitor the number of redirects
 	if redirectList, err := r.rClient.List(ctx); redirectList != nil && err == nil {
 		active.WithLabelValues("redirect").Set(float64(len(redirectList.Items)))
@@ -96,22 +93,31 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	redirect, err := r.rClient.GetNamespaced(ctx, req.NamespacedName)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
+			otelzap.L().WithError(err).Ctx(ctx).Info("Redirect resource not found. Ignoring since object must be deleted",
+				zap.String("name", "reconciler"),
+				zap.String("redirect", req.NamespacedName.String()),
+			)
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			observability.RecordInfo(ctx, span, log, "Shortlink resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 
 		// Error reading the object - requeue the request.
-		observability.RecordError(ctx, span, log, err, "Failed to fetch Redirect resource")
+		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to fetch Redirect resource",
+			zap.String("name", "reconciler"),
+			zap.String("redirect", req.NamespacedName.String()),
+		)
 		return ctrl.Result{}, err
 	}
 
 	// Check if the ingress already exists, if not create a new one
 	ingress, err := r.upsertRedirectIngress(ctx, redirect)
 	if err != nil {
-		observability.RecordError(ctx, span, log, err, "Failed to upsert redirect ingress")
+		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to upsert redirect ingress",
+			zap.String("name", "reconciler"),
+			zap.String("redirect", req.NamespacedName.String()),
+		)
 	}
 
 	// Update the Redirect status with the ingress name and the target
@@ -122,7 +128,10 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	if err = r.client.List(ctx, ingressList, listOpts...); err != nil {
-		observability.RecordError(ctx, span, log, err, "Failed to list ingresses")
+		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to list ingresses",
+			zap.String("name", "reconciler"),
+			zap.String("redirect", req.NamespacedName.String()),
+		)
 		return ctrl.Result{}, err
 	}
 
@@ -131,7 +140,10 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	redirect.Status.Target = ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/permanent-redirect"]
 	err = r.client.Status().Update(ctx, redirect)
 	if err != nil {
-		observability.RecordError(ctx, span, log, err, "Failed to update Redirect status")
+		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to update Redirect status",
+			zap.String("name", "reconciler"),
+			zap.String("redirect", req.NamespacedName.String()),
+		)
 		return ctrl.Result{}, err
 	}
 
@@ -141,10 +153,7 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *RedirectReconciler) upsertRedirectIngress(ctx context.Context, redirect *urlshortenerv1alpha1.Redirect) (*networkingv1.Ingress, error) {
 	ingress := &networkingv1.Ingress{}
 	err := r.client.Get(ctx, types.NamespacedName{Name: redirect.Name, Namespace: redirect.Namespace}, ingress)
-	ingress = redirectpkg.NewRedirectIngress(ingress, redirect)
-
-	// Set Redirect instance as the owner and controller
-	ctrl.SetControllerReference(redirect, ingress, r.scheme)
+	ingress = redirectpkg.UpdateRedirectIngress(ingress, redirect, r.scheme)
 
 	if err != nil && k8serrors.IsNotFound(err) {
 		if err := r.client.Create(ctx, ingress); err != nil {
@@ -161,7 +170,7 @@ func (r *RedirectReconciler) upsertRedirectIngress(ctx context.Context, redirect
 	return ingress, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// SetupWithManager sets up the api with the Manager.
 func (r *RedirectReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&urlshortenerv1alpha1.Redirect{}).

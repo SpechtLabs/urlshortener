@@ -18,13 +18,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
-	"net/http"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/spechtlabs/go-otel-utils/otelprovider"
+	"github.com/spechtlabs/go-otel-utils/otelzap"
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	"go.uber.org/zap"
@@ -38,23 +41,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/zapr"
-	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 
-	v1alpha1 "github.com/cedi/urlshortener/api/v1alpha1"
+	"github.com/cedi/urlshortener/api/v1alpha1"
 	"github.com/cedi/urlshortener/controllers"
+	apiController "github.com/cedi/urlshortener/pkg/api"
 	shortlinkClient "github.com/cedi/urlshortener/pkg/client"
-	apiController "github.com/cedi/urlshortener/pkg/controller"
-	"github.com/cedi/urlshortener/pkg/observability"
-	"github.com/cedi/urlshortener/pkg/router"
-
-	"github.com/pkg/errors"
 	//+kubebuilder:scaffold:imports
 )
 
 var (
 	scheme         = runtime.NewScheme()
-	serviceName    = "urlshortener"
 	serviceVersion = "1.0.0"
+	serviceName    = "urlshortener"
 )
 
 func init() {
@@ -90,30 +88,80 @@ func main() {
 
 	flag.Parse()
 
+	ctx, cancelCtx := context.WithCancelCause(context.Background())
+	defer cancelCtx(context.Canceled)
+
+	logProvider := otelprovider.NewLogger(
+		otelprovider.WithLogAutomaticEnv(),
+	)
+
+	traceProvider := otelprovider.NewTracer(
+		otelprovider.WithTraceAutomaticEnv(),
+	)
+
+	if !debug {
+		debug = os.Getenv("OTEL_LOG_LEVEL") == "debug"
+	}
+
 	// Initialize Logging
-	otelLogger, undo := observability.InitLogging(debug)
-	defer otelLogger.Sync()
-	defer undo()
-
-	ctrl.SetLogger(zapr.NewLogger(otelzap.L().Logger))
-
-	// Initialize Tracing (OpenTelemetry)
-	traceProvider, tracer, err := observability.InitTracer(serviceName, serviceVersion)
+	var zapLogger *zap.Logger
+	var err error
+	if debug {
+		zapLogger, err = zap.NewDevelopment()
+		gin.SetMode(gin.DebugMode)
+	} else {
+		zapLogger, err = zap.NewProduction()
+		gin.SetMode(gin.ReleaseMode)
+	}
 	if err != nil {
-		otelzap.L().Sugar().Errorw("failed initializing tracing",
-			zap.Error(err),
-		)
+		fmt.Printf("failed to initialize logger: %v", err)
 		os.Exit(1)
 	}
 
+	// Replace zap global
+	undoZapGlobals := zap.ReplaceGlobals(zapLogger)
+
+	// Redirect stdlib log to zap
+	undoStdLogRedirect := zap.RedirectStdLog(zapLogger)
+
+	// Create otelLogger
+	otelZapLogger := otelzap.New(zapLogger,
+		otelzap.WithCaller(true),
+		otelzap.WithMinLevel(zap.InfoLevel),
+		otelzap.WithAnnotateLevel(zap.WarnLevel),
+		otelzap.WithErrorStatusLevel(zap.ErrorLevel),
+		otelzap.WithStackTrace(false),
+		otelzap.WithLoggerProvider(logProvider),
+	)
+
+	// Replace global otelZap logger
+	undoOtelZapGlobals := otelzap.ReplaceGlobals(otelZapLogger)
+
 	defer func() {
-		if err := traceProvider.Shutdown(context.Background()); err != nil {
-			otelzap.L().Sugar().Errorw("Error shutting down tracer provider",
-				zap.Error(err),
-			)
+		if err := traceProvider.ForceFlush(context.Background()); err != nil {
+			otelzap.L().Warn("failed to flush traces")
 		}
+
+		if err := logProvider.ForceFlush(context.Background()); err != nil {
+			otelzap.L().Warn("failed to flush logs")
+		}
+
+		if err := traceProvider.Shutdown(context.Background()); err != nil {
+			panic(err)
+		}
+
+		if err := logProvider.Shutdown(context.Background()); err != nil {
+			panic(err)
+		}
+
+		undoStdLogRedirect()
+		undoOtelZapGlobals()
+		undoZapGlobals()
 	}()
 
+	ctrl.SetLogger(zapr.NewLogger(otelzap.L().Logger))
+
+	tracer := traceProvider.Tracer("urlshortener")
 	_, span := tracer.Start(context.Background(), "main.startManager")
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -129,10 +177,7 @@ func main() {
 
 	if err != nil {
 		span.RecordError(err)
-		otelzap.L().Sugar().Errorw("unable to start urlshortener",
-			zap.Error(err),
-		)
-		os.Exit(1)
+		otelzap.L().WithError(err).Ctx(ctx).Fatal("unable to start urlshortener")
 	}
 
 	sClient := shortlinkClient.NewShortlinkClient(
@@ -153,11 +198,7 @@ func main() {
 
 	if err = shortlinkReconciler.SetupWithManager(mgr); err != nil {
 		span.RecordError(err)
-		otelzap.L().Sugar().Errorw("unable to create controller",
-			zap.Error(err),
-			zap.String("controller", "ShortLink"),
-		)
-		os.Exit(1)
+		otelzap.L().WithError(err).Ctx(ctx).Fatal("unable to create api")
 	}
 
 	redirectReconciler := controllers.NewRedirectReconciler(
@@ -169,9 +210,9 @@ func main() {
 
 	if err = redirectReconciler.SetupWithManager(mgr); err != nil {
 		span.RecordError(err)
-		otelzap.L().Sugar().Errorw("unable to create controller",
+		otelzap.L().Sugar().Errorw("unable to create api",
 			zap.Error(err),
-			zap.String("controller", "Redirect"),
+			zap.String("api", "Redirect"),
 		)
 		os.Exit(1)
 	}
@@ -180,17 +221,11 @@ func main() {
 	span.End()
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		otelzap.L().Sugar().Errorw("unable to set up health check",
-			zap.Error(err),
-		)
-		os.Exit(1)
+		otelzap.L().WithError(err).Ctx(ctx).Fatal("unable to set up health check")
 	}
 
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		otelzap.L().Sugar().Errorw("unable to set up ready check",
-			zap.Error(err),
-		)
-		os.Exit(1)
+		otelzap.L().WithError(err).Ctx(ctx).Fatal("unable to set up ready check")
 	}
 
 	// run our urlshortener mgr in a separate go routine
@@ -198,67 +233,66 @@ func main() {
 		otelzap.L().Info("starting urlshortener")
 
 		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-			otelzap.L().Sugar().Errorw("unable starting urlshortener",
-				zap.Error(err),
-			)
-			os.Exit(1)
+			otelzap.L().WithError(err).Ctx(ctx).Fatal("unable starting urlshortener")
 		}
 	}()
-
-	shortlinkController := apiController.NewShortlinkController(
-		tracer,
-		sClient,
-	)
 
 	// Init Gin Framework
 	gin.SetMode(gin.ReleaseMode)
-	r, srv := router.NewGinGonicHTTPServer(bindAddr, serviceName)
+	srv := apiController.NewGinGonicHTTPServer(sClient)
 
 	otelzap.L().Info("Load API routes")
-	router.Load(r, shortlinkController)
+	srv.Load()
 
-	// run our gin server mgr in a separate go routine
+	srv.ServeAsync(bindAddr)
+
+	// setup stop signal handlers
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
-			otelzap.L().Sugar().Errorw("failed to listen and serve",
-				zap.Error(err),
-			)
+		select {
+		// Wait for context cancel
+		case <-ctx.Done():
+
+		// Wait for signal
+		case sig := <-sigs:
+			switch sig {
+			case syscall.SIGTERM:
+				fallthrough
+			case syscall.SIGINT:
+				fallthrough
+			case syscall.SIGQUIT:
+				// On terminate signal, cancel context causing the program to terminate
+				cancelCtx(fmt.Errorf("signal %s received", sig))
+
+			default:
+				otelzap.L().Ctx(ctx).Warn("Received unknown signal", zap.String("signal", sig.String()))
+			}
 		}
 	}()
 
-	handleShutdown(srv)
-
-	otelzap.L().Info("Server exiting")
-}
-
-// handleShutdown waits for interrupt signal and then tries to gracefully
-// shutdown the server with a timeout of 5 seconds.
-func handleShutdown(srv *http.Server) {
-	quit := make(chan os.Signal, 1)
-
-	signal.Notify(
-		quit,
-		syscall.SIGINT,  // kill -2 is syscall.SIGINT
-		syscall.SIGTERM, // kill (no param) default send syscall.SIGTERM
-		// kill -9 is syscall.SIGKILL but can't be caught
-	)
-
-	// wait (and block) until shutdown signal is received
-	<-quit
-	otelzap.L().Info("Shutting down server...")
+	// Wait for context to be done
+	<-ctx.Done()
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	otelzap.L().Info("Shutting down server...")
+
 	// try to shut down the http server gracefully. If ctx deadline exceeds
 	// then srv.Shutdown(ctx) will return an error, causing us to force
 	// the shutdown
 	if err := srv.Shutdown(ctx); err != nil {
-		otelzap.L().Sugar().Errorw("Server forced to shutdown",
-			zap.Error(err),
-		)
+		otelzap.L().WithError(err).Error("Server forced to shutdown")
 		os.Exit(1)
+	}
+
+	// Wait for context cancel
+	if err := ctx.Err(); !errors.Is(err, context.Canceled) {
+		otelzap.L().WithError(err).Fatal("Exiting")
+	} else {
+		otelzap.L().Info("Exiting")
 	}
 }
