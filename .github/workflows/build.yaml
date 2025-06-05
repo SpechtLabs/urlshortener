@@ -44,7 +44,7 @@ jobs:
         with:
           go-version-file: "go.mod"
           cache: true
-          cache-dependency-path: "**/*.sum"
+          cache-dependency-path: "*.sum"
 
       - name: GolangCI Lint
         uses: golangci/golangci-lint-action@v8
@@ -77,9 +77,9 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: "src/go.mod"
+          go-version-file: "go.mod"
           cache: true
-          cache-dependency-path: "**/*.sum"
+          cache-dependency-path: "*.sum"
 
       - name: Run tests
         run: go test -race -cover -coverprofile=coverage.txt ./...
@@ -103,7 +103,7 @@ jobs:
     steps:
       - uses: fgrosse/go-coverage-report@v1.2.0
         with:
-          root-package: "github.com/${{ github.repository }}/src"
+          root-package: "github.com/${{ github.repository }}"
           coverage-artifact-name: "code-coverage"
           coverage-file-name: "coverage.txt"
 
@@ -123,7 +123,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
-          cache-dependency-path: "**/*.sum"
+          cache-dependency-path: "*.sum"
           cache: true
 
       - name: Run GoReleaser
