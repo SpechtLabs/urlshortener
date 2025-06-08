@@ -159,6 +159,8 @@ func main() {
 
 	ctrl.SetLogger(zapr.NewLogger(otelzap.L().Logger))
 
+	otelzap.L().Info("Starting urlshortener")
+
 	tracer := traceProvider.Tracer("urlshortener")
 	_, span := tracer.Start(context.Background(), "main.startManager")
 
