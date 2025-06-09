@@ -5,14 +5,17 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/cedi/urlshortener/api/v1alpha1"
 	"github.com/gin-gonic/gin"
 	"github.com/sierrasoftworks/humane-errors-go"
+
 	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
 
 // HandleCreateShortLink handles the creation of a shortlink and redirects according to the configuration
@@ -69,11 +72,11 @@ func (s *UrlshortenerServer) HandleCreateShortLink(ct *gin.Context) {
 		return
 	}
 
-	shortlink := v1alpha1.ShortLink{
-		ObjectMeta: v1.ObjectMeta{
+	shortlink := v1alpha1.Shortlink{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: shortlinkName,
 		},
-		Spec: v1alpha1.ShortLinkSpec{},
+		Spec: v1alpha1.ShortlinkSpec{},
 	}
 
 	if err := json.Unmarshal(jsonData, &shortlink.Spec); err != nil {
@@ -94,7 +97,7 @@ func (s *UrlshortenerServer) HandleCreateShortLink(ct *gin.Context) {
 		return
 	}
 
-	ct.JSON(http.StatusOK, ShortLink{
+	ct.JSON(http.StatusOK, v1alpha1.ShortLinkAPI{
 		Name:   shortlink.Name,
 		Spec:   shortlink.Spec,
 		Status: shortlink.Status,

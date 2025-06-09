@@ -1,5 +1,5 @@
 /*
-Copyright 2022.
+Copyright 2025.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,15 +17,11 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"golang.org/x/exp/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// RedirectSpec defines the desired state of Redirect
+// RedirectSpec defines the desired state of Redirect.
 type RedirectSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// Source is the source URL from which the redirection happens
 	// +kubebuilder:validation:Required
 	Source string `json:"source"`
@@ -55,19 +51,20 @@ type TLSSpec struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
-// RedirectStatus defines the observed state of Redirect
+// RedirectStatus defines the observed state of Redirect.
 type RedirectStatus struct {
 	Target      string   `json:"target,omitempty"`
 	IngressName []string `json:"ingressNames,omitempty"`
 }
 
-// Redirect is the Schema for the redirects API
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:printcolumn:name="Source",type=string,JSONPath=`.spec.source`
 // +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.target`
 // +kubebuilder:printcolumn:name="Code",type=string,JSONPath=`.spec.code`
+
+// Redirect is the Schema for the redirects API.
 type Redirect struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -76,9 +73,9 @@ type Redirect struct {
 	Status RedirectStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
-// RedirectList contains a list of Redirect
+// RedirectList contains a list of Redirect.
 type RedirectList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -87,8 +84,4 @@ type RedirectList struct {
 
 func init() {
 	SchemeBuilder.Register(&Redirect{}, &RedirectList{})
-}
-
-func (s *ShortLink) IsOwnedBy(username string) bool {
-	return s.Spec.Owner == username || slices.Contains(s.Spec.CoOwners, username)
 }

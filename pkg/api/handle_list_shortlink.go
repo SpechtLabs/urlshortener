@@ -6,10 +6,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sierrasoftworks/humane-errors-go"
+
 	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+
+	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
 
 // HandleListShortLink handles the listing of
@@ -61,10 +64,10 @@ func (s *UrlshortenerServer) HandleListShortLink(ct *gin.Context) {
 		return
 	}
 
-	targetList := make([]ShortLink, len(shortlinkList.Items))
+	targetList := make([]v1alpha1.ShortLinkAPI, len(shortlinkList.Items))
 
 	for idx, shortlink := range shortlinkList.Items {
-		targetList[idx] = ShortLink{
+		targetList[idx] = v1alpha1.ShortLinkAPI{
 			Name:   shortlink.Name,
 			Spec:   shortlink.Spec,
 			Status: shortlink.Status,

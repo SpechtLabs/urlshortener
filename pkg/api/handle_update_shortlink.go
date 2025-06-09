@@ -6,13 +6,15 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cedi/urlshortener/api/v1alpha1"
 	"github.com/gin-gonic/gin"
 	"github.com/sierrasoftworks/humane-errors-go"
+
 	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+
+	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
 
 // HandleUpdateShortLink handles the update of a shortlink
@@ -68,7 +70,7 @@ func (s *UrlshortenerServer) HandleUpdateShortLink(ct *gin.Context) {
 		return
 	}
 
-	shortlinkSpec := v1alpha1.ShortLinkSpec{}
+	shortlinkSpec := v1alpha1.ShortlinkSpec{}
 	if err := json.Unmarshal(jsonData, &shortlinkSpec); err != nil {
 		herr := humane.Wrap(err, "Failed to unmarshal ShortLink Spec JSON")
 
@@ -114,7 +116,7 @@ func (s *UrlshortenerServer) HandleUpdateShortLink(ct *gin.Context) {
 		return
 	}
 
-	ct.JSON(http.StatusOK, ShortLink{
+	ct.JSON(http.StatusOK, v1alpha1.ShortLinkAPI{
 		Name:   shortlink.Name,
 		Spec:   shortlink.Spec,
 		Status: shortlink.Status,
