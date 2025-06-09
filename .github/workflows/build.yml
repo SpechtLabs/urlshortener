@@ -181,8 +181,8 @@ jobs:
 
   docker-build:
     runs-on: ubuntu-latest
-    needs:
-      - goreleaser
+#    needs:
+#      - goreleaser
 
     strategy:
       fail-fast: false
@@ -235,10 +235,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: html
-
-      - name: mark artifact as executable
-        run: |
-          chmod +x urlshortener
 
       - name: Build and push by digest
         id: build
