@@ -1,26 +1,9 @@
 apiVersion: urlshortener.cedi.dev/v1alpha1
-kind: ShortLink
+kind: Shortlink
 metadata:
+  labels:
+    app.kubernetes.io/name: 2025w24
+    app.kubernetes.io/managed-by: kustomize
   name: shortlink-sample
 spec:
-  alias: "cow"
-  target: "https://openfaas.cedi.dev/function/cows"
-  after: 60
----
-apiVersion: urlshortener.cedi.dev/v1alpha1
-kind: ShortLink
-metadata:
-  name: shortlink-sample2
-spec:
-  alias: "foobar"
-  target: "https://openfaas.cedi.dev/function/cows"
-  after: 5
----
-apiVersion: urlshortener.cedi.dev/v1alpha1
-kind: ShortLink
-metadata:
-  name: shortlink-sample3
-spec:
-  alias: "foobar"
-  target: "https://openfaas.cedi.dev/function/cows"
-  after: 5
+  # TODO(user): Add fields here

@@ -1,5 +1,5 @@
 /*
-Copyright 2022.
+Copyright 2025.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"slices"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ShortLinkSpec defines the desired state of ShortLink
-type ShortLinkSpec struct {
+// ShortlinkSpec defines the desired state of Shortlink.
+type ShortlinkSpec struct {
 	// Owner is the GitHub user name which created the shortlink
 	// +kubebuilder:validation:Required
 	Owner string `json:"owner"`
@@ -48,8 +50,8 @@ type ShortLinkSpec struct {
 	Code int `json:"code,omitempty" enums:"200,300,301,302,303,304,305,307,308"`
 }
 
-// ShortLinkStatus defines the observed state of ShortLink
-type ShortLinkStatus struct {
+// ShortlinkStatus defines the observed state of Shortlink.
+type ShortlinkStatus struct {
 	// Count represents how often this ShortLink has been called
 	// +kubebuilder:default:=0
 	// +kubebuilder:validation:Minimum=0
@@ -65,7 +67,6 @@ type ShortLinkStatus struct {
 	ChangedBy string `json:"changedby"`
 }
 
-// ShortLink is the Schema for the shortlinks API
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced
@@ -74,22 +75,38 @@ type ShortLinkStatus struct {
 // +kubebuilder:printcolumn:name="After",type=string,JSONPath=`.spec.after`
 // +kubebuilder:printcolumn:name="Invoked",type=string,JSONPath=`.status.count`
 // +k8s:openapi-gen=true
-type ShortLink struct {
+
+// Shortlink is the Schema for the shortlinks API.
+type Shortlink struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ShortLinkSpec   `json:"spec,omitempty"`
-	Status ShortLinkStatus `json:"status,omitempty"`
+	Spec   ShortlinkSpec   `json:"spec,omitempty"`
+	Status ShortlinkStatus `json:"status,omitempty"`
 }
 
-// ShortLinkList contains a list of ShortLink
 // +kubebuilder:object:root=true
-type ShortLinkList struct {
+
+// ShortlinkList contains a list of Shortlink.
+type ShortlinkList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ShortLink `json:"items"`
+	Items           []Shortlink `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&ShortLink{}, &ShortLinkList{})
+	SchemeBuilder.Register(&Shortlink{}, &ShortlinkList{})
+}
+
+// +kubebuilder:object:root=false
+
+// ShortLinkAPI is the API representation of a Shortlink.
+type ShortLinkAPI struct {
+	Name   string          `json:"name"`
+	Spec   ShortlinkSpec   `json:"spec,omitempty"`
+	Status ShortlinkStatus `json:"status,omitempty"`
+}
+
+func (s *Shortlink) IsOwnedBy(username string) bool {
+	return s.Spec.Owner == username || slices.Contains(s.Spec.CoOwners, username)
 }

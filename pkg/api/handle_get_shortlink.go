@@ -6,10 +6,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sierrasoftworks/humane-errors-go"
+
 	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+
+	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
 
 // HandleGetShortLink returns the shortlink
@@ -66,7 +69,7 @@ func (s *UrlshortenerServer) HandleGetShortLink(ct *gin.Context) {
 		return
 	}
 
-	ct.JSON(http.StatusOK, ShortLink{
+	ct.JSON(http.StatusOK, v1alpha1.ShortLinkAPI{
 		Name:   shortlink.Name,
 		Spec:   shortlink.Spec,
 		Status: shortlink.Status,

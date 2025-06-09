@@ -6,24 +6,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cedi/urlshortener/docs"
-	"github.com/cedi/urlshortener/pkg/api/middleware"
-	shortlinkClient "github.com/cedi/urlshortener/pkg/client"
-	ginzap "github.com/gin-contrib/zap"
 	"github.com/sierrasoftworks/humane-errors-go"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/spechtlabs/go-gin-prometheus"
+	ginzap "github.com/gin-contrib/zap"
+	ginprometheus "github.com/spechtlabs/go-gin-prometheus"
 	"github.com/spechtlabs/go-otel-utils/otelzap"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/spechtlabs/urlshortener/docs"
+	"github.com/spechtlabs/urlshortener/pkg/api/middleware"
+	shortlinkClient "github.com/spechtlabs/urlshortener/pkg/client"
+
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/gin"
-
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -51,19 +53,21 @@ type UrlshortenerServer struct {
 }
 
 // NewGinGonicHTTPServer creates a new urlshortener API Server
-func NewGinGonicHTTPServer(client *shortlinkClient.ShortlinkClient) *UrlshortenerServer {
+func NewGinGonicHTTPServer(client client.Client) *UrlshortenerServer {
+	sClient := shortlinkClient.NewShortlinkClient(client)
+
 	r := &UrlshortenerServer{
 		srv:        nil,
 		tracer:     otel.Tracer("urlshortener"),
-		userClient: shortlinkClient.NewUserShortLinkClient(client),
-		client:     client,
+		userClient: shortlinkClient.NewUserShortLinkClient(sClient),
+		client:     sClient,
 	}
 
 	// Setup Gin router
 	r.router = gin.New(func(e *gin.Engine) {})
 
 	// Setup otelgin to expose Open Telemetry
-	r.router.Use(otelgin.Middleware("urlshortener"))
+	r.router.Use(otelgin.Middleware("gin"))
 
 	// Setup ginzap to log everything correctly to zap
 	r.router.Use(ginzap.GinzapWithConfig(otelzap.L(), &ginzap.Config{

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sierrasoftworks/humane-errors-go"
+
 	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
