@@ -2,10 +2,6 @@ module github.com/spechtlabs/urlshortener
 
 go 1.24.0
 
-toolchain go1.24.4
-
-godebug default=go1.23
-
 require (
 	github.com/gin-contrib/zap v1.1.5
 	github.com/gin-gonic/contrib v0.0.0-20250521004450-2b1292699c15
