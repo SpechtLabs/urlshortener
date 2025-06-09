@@ -226,15 +226,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Pull in platform artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: urlshortener-linux-${{ matrix.arch }}
+#      - name: Pull in platform artifact
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: urlshortener-linux-${{ matrix.arch }}
 
-      - name: Pull in html assets
-        uses: actions/download-artifact@v4
-        with:
-          name: html
+#      - name: Pull in html assets
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: html
 
       - name: Build and push by digest
         id: build
