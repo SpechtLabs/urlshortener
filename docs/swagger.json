@@ -4,7 +4,7 @@
         "description": "A url shortener, written in Go running on Kubernetes",
         "title": "URL Shortener",
         "contact": {
-            "name": "Cedric Kienzler",
+            "name": "Cedric Specht",
             "url": "cedi.dev",
             "email": "urlshortener@cedi.dev"
         },

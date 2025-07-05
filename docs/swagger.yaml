@@ -77,7 +77,7 @@ definitions:
 info:
   contact:
     email: urlshortener@cedi.dev
-    name: Cedric Kienzler
+    name: Cedric Specht
     url: cedi.dev
   description: A url shortener, written in Go running on Kubernetes
   license:

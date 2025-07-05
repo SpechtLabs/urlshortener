@@ -11,7 +11,7 @@ const docTemplate = `{
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
         "contact": {
-            "name": "Cedric Kienzler",
+            "name": "Cedric Specht",
             "url": "cedi.dev",
             "email": "urlshortener@cedi.dev"
         },

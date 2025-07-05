@@ -34,7 +34,7 @@ import (
 // @title 			URL Shortener
 // @version         2.0
 // @description     A url shortener, written in Go running on Kubernetes
-// @contact.name   Cedric Kienzler
+// @contact.name   Cedric Specht
 // @contact.url    specht-labs.de
 // @contact.email  urlshortener@specht-labs.de
 // @license.name  	Apache 2.0
