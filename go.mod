@@ -13,7 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/sierrasoftworks/humane-errors-go v0.0.0-20241125132722-d032d7dd359e
 	github.com/spechtlabs/go-gin-prometheus v0.1.1
-	github.com/spechtlabs/go-otel-utils/otelprovider v0.0.8
+	github.com/spechtlabs/go-otel-utils/otelprovider v0.0.10
 	github.com/spechtlabs/go-otel-utils/otelzap v0.0.10
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0

@@ -178,6 +178,8 @@ github.com/spechtlabs/go-gin-prometheus v0.1.1 h1:sy40BoGMcZebBSgEDkCQ71f/5VnNNu
 github.com/spechtlabs/go-gin-prometheus v0.1.1/go.mod h1:5jrG2NwLJR0yg4dc+MVb2cJBCGFwXU3+xqD1qtOWSzw=
 github.com/spechtlabs/go-otel-utils/otelprovider v0.0.8 h1:QE5n0ReT+dpMGyJH1z8RD5GrzkxF3ZsYwNcrUJw6nPA=
 github.com/spechtlabs/go-otel-utils/otelprovider v0.0.8/go.mod h1:eXwaYnplhrfg/WXkIQ8ziC68Xa4wR7C0RilMBVpU9nM=
+github.com/spechtlabs/go-otel-utils/otelprovider v0.0.10 h1:Q5p+5KGA587GfzR6FdXGje4XBfxhi1u4NSu6lSnWCGA=
+github.com/spechtlabs/go-otel-utils/otelprovider v0.0.10/go.mod h1:sFuJXEBbNq/pQx9pP5OnVtx9yGJnH4fXi7x3qihW0ak=
 github.com/spechtlabs/go-otel-utils/otelzap v0.0.10 h1:RR/WS4b+ABxNL7xzlK4FTvnuXRbGk3yyggvvLnQ+FeM=
 github.com/spechtlabs/go-otel-utils/otelzap v0.0.10/go.mod h1:IhsBuW+sZwLxX1Ww5LmTlIonBP8GiyhsiZkIRq+ySE0=
 github.com/spf13/cobra v1.8.1 h1:e5/vxKd/rZsfSJMUX1agtjeTDf+qv1/JdBF8gg5k9ZM=
