@@ -11,7 +11,7 @@ require (
 	github.com/onsi/gomega v1.36.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
-	github.com/sierrasoftworks/humane-errors-go v0.0.0-20241125132722-d032d7dd359e
+	github.com/sierrasoftworks/humane-errors-go v0.0.0-20250811205537-5f14a04ebff5
 	github.com/spechtlabs/go-gin-prometheus v0.1.1
 	github.com/spechtlabs/go-otel-utils/otelprovider v0.0.8
 	github.com/spechtlabs/go-otel-utils/otelzap v0.0.10
