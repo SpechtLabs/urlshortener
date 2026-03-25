@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/gin-contrib/zap v1.1.6
-	github.com/gin-gonic/contrib v0.0.0-20250521004450-2b1292699c15
+	github.com/gin-gonic/contrib v0.0.0-20260101091603-d12f07a9136b
 	github.com/gin-gonic/gin v1.10.1
 	github.com/go-logr/zapr v1.3.0
 	github.com/onsi/ginkgo/v2 v2.22.0
