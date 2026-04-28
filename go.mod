@@ -22,7 +22,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.28.0
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.1
 	k8s.io/client-go v0.33.0
