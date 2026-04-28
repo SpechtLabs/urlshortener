@@ -11,7 +11,7 @@ require (
 	github.com/onsi/gomega v1.36.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
-	github.com/sierrasoftworks/humane-errors-go v0.0.0-20250811205537-5f14a04ebff5
+	github.com/sierrasoftworks/humane-errors-go v0.0.0-20260428132744-178d2d0aad2c
 	github.com/spechtlabs/go-gin-prometheus v0.1.1
 	github.com/spechtlabs/go-otel-utils/otelprovider v0.0.15
 	github.com/spechtlabs/go-otel-utils/otelzap v0.0.15
@@ -22,7 +22,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.28.0
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.1
 	k8s.io/client-go v0.33.0
