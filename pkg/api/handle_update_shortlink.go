@@ -4,15 +4,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sierrasoftworks/humane-errors-go"
-
-	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
 
 	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
@@ -40,79 +36,39 @@ func (s *UrlshortenerServer) HandleUpdateShortLink(ct *gin.Context) {
 
 	ctx := ct.Request.Context()
 	span := trace.SpanFromContext(ctx)
-
 	span.SetAttributes(attribute.String("shortlink", shortlinkName), attribute.String("referrer", ct.Request.Referer()))
 
 	if len(userName) == 0 {
-		err := humane.New("No user found for request",
-			"ensure you include a Bearer token in the Authorization header, e.g. Authorization: Bearer <token> or Authorization: token <token>",
-		)
-
-		otelzap.L().WithError(err).Ctx(ctx).Error(err.Error(),
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "list"),
-		)
-
-		ct.JSON(http.StatusUnauthorized, gin.H{"error": err.Error(), "advice": err.Advice()})
+		abortWithError(ct, http.StatusUnauthorized, operationUpdate, newNoUserError())
 		return
 	}
 
 	jsonData, err := io.ReadAll(ct.Request.Body)
 	if err != nil {
-		herr := humane.Wrap(err, "Failed to read request-body")
-
-		otelzap.L().WithError(err).Ctx(ctx).Error(herr.Error(),
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "update"),
-		)
-
-		ct.JSON(http.StatusInternalServerError, gin.H{"error": herr.Error(), "cause": herr.Cause()})
+		abortWithError(ct, http.StatusInternalServerError, operationUpdate, humane.Wrap(err, "Failed to read request-body",
+			"Send the ShortLink spec as the JSON body of the request",
+		))
 		return
 	}
 
 	shortlinkSpec := v1alpha1.ShortlinkSpec{}
 	if err := json.Unmarshal(jsonData, &shortlinkSpec); err != nil {
-		herr := humane.Wrap(err, "Failed to unmarshal ShortLink Spec JSON")
-
-		otelzap.L().WithError(herr).Ctx(ctx).Error(herr.Error(),
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "update"),
-		)
-
-		ct.JSON(http.StatusInternalServerError, gin.H{"error": herr.Error(), "cause": herr.Cause()})
+		abortWithError(ct, http.StatusInternalServerError, operationUpdate, humane.Wrap(err, "Failed to unmarshal ShortLink Spec JSON",
+			"Send the ShortLink spec as the JSON body of the request, e.g. {\"target\": \"https://example.com\"}",
+		))
 		return
 	}
 
-	shortlink, err := s.userClient.Get(ctx, userName, shortlinkName)
-	if err != nil {
-		statusCode := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "not found") {
-			statusCode = http.StatusNotFound
-		}
-
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to get ShortLink",
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "delete"),
-		)
-
-		ct.JSON(statusCode, gin.H{"error": err.Error()})
+	shortlink, herr := s.userClient.Get(ctx, userName, shortlinkName)
+	if herr != nil {
+		abortWithError(ct, statusFor(herr), operationUpdate, herr)
 		return
 	}
 
-	// When shortlink was not found
-	if shortlink == nil {
-		ct.JSON(http.StatusInternalServerError, gin.H{"error": "Shortlink not found"})
-		return
-	}
 	shortlink.Spec = shortlinkSpec
 
 	if err := s.userClient.Update(ctx, userName, shortlink); err != nil {
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to update ShortLink",
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "update"),
-		)
-
-		ct.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		abortWithError(ct, http.StatusInternalServerError, operationUpdate, err)
 		return
 	}
 

@@ -1,0 +1,98 @@
+name: Image
+
+# The container image, for linux/amd64 and linux/arm64. ci.yaml builds it for
+# every pull request without pushing; release.yaml pushes it to ghcr.io for
+# every commit on main (the main tag the cluster runs) and for every release,
+# and signs what it pushed.
+#
+# No permissions block: a called workflow gets its caller's, so the pull
+# request build only reads the repository, and release.yaml grants the
+# package and OIDC permissions that pushing and signing need.
+on:
+  workflow_call:
+    inputs:
+      push:
+        description: Push the image to ghcr.io and sign it
+        type: boolean
+        default: false
+      ref:
+        description: The ref to build (default the commit that triggered the run)
+        type: string
+        default: ""
+      tags:
+        description: The tags to push, in docker/metadata-action's tags syntax
+        type: string
+        default: ""
+
+env:
+  IMAGE: ghcr.io/spechtlabs/urlshortener
+  # mise itself, pinned; go.yaml explains why.
+  # renovate: datasource=github-releases depName=jdx/mise extractVersion=^v(?<version>.+)$
+  MISE_VERSION: 2026.10.2
+
+jobs:
+  image:
+    name: Build${{ inputs.push && ' and push' || '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # The OCI labels (source, revision, created, version) and the tags.
+      # latest is only ever set explicitly, by a release.
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: ${{ inputs.tags }}
+
+      - name: Log in to ghcr.io
+        if: inputs.push
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The Dockerfile cross-compiles on the runner's platform, so the arm64
+      # image builds without emulation. The layer cache lives in the Actions
+      # cache, scoped to this workflow.
+      - name: Build${{ inputs.push && ' and push' || '' }}
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ inputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          provenance: ${{ inputs.push && 'mode=max' || 'false' }}
+          sbom: ${{ inputs.push }}
+          cache-from: type=gha,scope=image
+          cache-to: ${{ inputs.push && 'type=gha,scope=image,mode=max' || '' }}
+
+      - name: Set up mise
+        if: inputs.push
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: cosign
+
+      # A keyless signature by the workflow's identity, over the digest, so
+      # it covers every tag pushed above. Verify with:
+      #   cosign verify ghcr.io/spechtlabs/urlshortener:<tag> \
+      #     --certificate-identity-regexp '^https://github.com/SpechtLabs/urlshortener/' \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - name: Sign the image
+        if: inputs.push
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"

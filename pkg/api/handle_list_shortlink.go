@@ -2,15 +2,10 @@ package api
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sierrasoftworks/humane-errors-go"
-
-	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
 
 	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
@@ -30,37 +25,20 @@ import (
 // @Router /api/v1/shortlink/ [get]
 // @Security bearerAuth
 func (s *UrlshortenerServer) HandleListShortLink(ct *gin.Context) {
-	shortlinkName := ct.Param("shortlink")
 	userName := ct.GetString("githubUserName")
 
 	ctx := ct.Request.Context()
 	span := trace.SpanFromContext(ctx)
-
-	span.SetAttributes(attribute.String("shortlink", shortlinkName), attribute.String("referrer", ct.Request.Referer()))
+	span.SetAttributes(attribute.String("referrer", ct.Request.Referer()))
 
 	if len(userName) == 0 {
-		err := humane.New("No user found for request",
-			"ensure you include a Bearer token in the Authorization header, e.g. Authorization: Bearer <token> or Authorization: token <token>",
-		)
-
-		otelzap.L().WithError(err).Ctx(ctx).Error(err.Error(),
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "list"),
-		)
-
-		ct.JSON(http.StatusUnauthorized, gin.H{"error": err.Error(), "advice": err.Advice()})
+		abortWithError(ct, http.StatusUnauthorized, operationList, newNoUserError())
 		return
 	}
 
 	shortlinkList, err := s.userClient.List(ctx, userName)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "not found") {
-			statusCode = http.StatusNotFound
-		}
-
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to list ShortLink", zap.String("operation", "list"))
-		ct.JSON(statusCode, gin.H{"error": err.Error()})
+		abortWithError(ct, statusFor(err), operationList, err)
 		return
 	}
 

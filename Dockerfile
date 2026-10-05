@@ -1,49 +1,48 @@
-# Build the manager binary
-FROM docker.io/golang:1.26 AS builder
+# urlshortener container image: the controller, the redirect server and the
+# API in one binary, with the HTML templates it renders next to it.
+#
+#   docker build -t urlshortener:dev .    (or: mise run image)
+
+# Keep in lockstep with go in .mise.toml; Renovate bumps both together.
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27.1 AS builder
+
+WORKDIR /src
+
+# The module files first, so the download layer survives source edits.
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY api/ ./api/
+COPY cmd/ ./cmd/
+COPY docs/ ./docs/
+COPY internal/ ./internal/
+COPY pkg/ ./pkg/
+
 ARG TARGETOS
 ARG TARGETARCH
 
-WORKDIR /workspace
-# Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
+# Cross-compiled on the build platform, so the multi-arch build doesn't run
+# the Go toolchain under emulation. CGO is off because the runtime image has
+# no libc.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags "-s -w" -o /out/urlshortener ./cmd
 
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
+FROM gcr.io/distroless/static-debian12:nonroot
 
-# Copy the go source
-COPY cmd/main.go cmd/main.go
-COPY api/ api/
-COPY internal/ internal/
-COPY html/ html/
-COPY pkg/ pkg/
-COPY docs/ docs/
-
-# Build
-# the GOARCH has not a default value to allow the binary be built according to the host where the command
-# was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
-# the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
-# by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-arm64} go build -a -o manager cmd/main.go
-
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
-
+# The server reads its templates and assets from html/ in the working
+# directory.
 WORKDIR /
-
-COPY html/ html/
-COPY --from=builder /workspace/manager .
+COPY html/ ./html/
+COPY --from=builder /out/urlshortener /urlshortener
 
 USER 65532:65532
 
-LABEL org.opencontainers.image.title="URL Shortener"
-LABEL org.opencontainers.image.source="https://github.com/SpechtLabs/urlshortener"
-LABEL org.opencontainers.image.description="TBD"
+LABEL org.opencontainers.image.title="urlshortener"
+LABEL org.opencontainers.image.description="A URL shortener and redirect controller for Kubernetes"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
-LABEL org.opencontainers.image.authors="SpechtLabs <cedi@specht-labs.de>"
-LABEL org.opencontainers.image.url="https://staticpages.specht-labs.de"
 LABEL org.opencontainers.image.vendor="SpechtLabs"
 
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/urlshortener"]

@@ -2,9 +2,9 @@ package client
 
 import (
 	"context"
-	"os"
+	"fmt"
 
-	"github.com/pkg/errors"
+	"github.com/sierrasoftworks/humane-errors-go"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -22,32 +22,34 @@ import (
 type RedirectClient struct {
 	client client.Client
 	tracer trace.Tracer
+	settings
 }
 
 // NewRedirectClient creates a new Redirect Client
-func NewRedirectClient(client client.Client) *RedirectClient {
+func NewRedirectClient(k8sClient client.Client, opts ...Option) *RedirectClient {
 	return &RedirectClient{
-		client: client,
-		tracer: otel.Tracer("urlshortener"),
+		client:   k8sClient,
+		tracer:   otel.Tracer("urlshortener"),
+		settings: newSettings(opts),
 	}
 }
 
-func (c *RedirectClient) Get(ct context.Context, name string) (*v1alpha1.Redirect, error) {
+// Get returns a Redirect in the current namespace
+func (c *RedirectClient) Get(ct context.Context, name string) (*v1alpha1.Redirect, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "RedirectClient.Get", trace.WithAttributes(attribute.String("name", name)))
 	defer span.End()
 
-	// try to read the namespace from /var/run
-	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	namespace, err := currentNamespace(c.namespaceFile)
 	if err != nil {
 		span.RecordError(err)
-		return nil, errors.Wrap(err, "Unable to read current namespace")
+		return nil, err
 	}
 
-	return c.GetNamespaced(ctx, types.NamespacedName{Name: name, Namespace: string(namespace)})
+	return c.GetNamespaced(ctx, types.NamespacedName{Name: name, Namespace: namespace})
 }
 
 // GetNameNamespace returns a Redirect for a given name in a given namespace
-func (c *RedirectClient) GetNameNamespace(ct context.Context, name, namespace string) (*v1alpha1.Redirect, error) {
+func (c *RedirectClient) GetNameNamespace(ct context.Context, name, namespace string) (*v1alpha1.Redirect, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "RedirectClient.GetNameNamespace", trace.WithAttributes(attribute.String("name", name), attribute.String("namespace", namespace)))
 	defer span.End()
 
@@ -55,7 +57,7 @@ func (c *RedirectClient) GetNameNamespace(ct context.Context, name, namespace st
 }
 
 // GetNamespaced returns a Redirect
-func (c *RedirectClient) GetNamespaced(ct context.Context, nameNamespaced types.NamespacedName) (*v1alpha1.Redirect, error) {
+func (c *RedirectClient) GetNamespaced(ct context.Context, nameNamespaced types.NamespacedName) (*v1alpha1.Redirect, humane.Error) {
 	ctx, span := c.tracer.Start(
 		ct,
 		"RedirectClient.GetNamespaced",
@@ -66,50 +68,51 @@ func (c *RedirectClient) GetNamespaced(ct context.Context, nameNamespaced types.
 	)
 	defer span.End()
 
-	Redirect := &v1alpha1.Redirect{}
+	redirect := &v1alpha1.Redirect{}
 
-	err := c.client.Get(ctx, nameNamespaced, Redirect)
-	if err != nil {
+	if err := c.client.Get(ctx, nameNamespaced, redirect); err != nil {
 		span.RecordError(err)
-		return nil, err
+		return nil, humane.Wrap(err, fmt.Sprintf("Unable to get Redirect %s", nameNamespaced),
+			"Check that the Redirect exists and the controller's service account may read redirects.urlshortener.cedi.dev",
+		)
 	}
 
-	return Redirect, nil
+	return redirect, nil
 }
 
 // ListAll returns a list of all Redirect
-func (c *RedirectClient) ListAll(ct context.Context) (*v1alpha1.RedirectList, error) {
+func (c *RedirectClient) ListAll(ct context.Context) (*v1alpha1.RedirectList, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "RedirectClient.List")
 	defer span.End()
 
-	Redirects := &v1alpha1.RedirectList{}
+	redirects := &v1alpha1.RedirectList{}
 
-	err := c.client.List(ctx, Redirects)
+	if err := c.client.List(ctx, redirects); err != nil {
+		span.RecordError(err)
+		return nil, humane.Wrap(err, "Unable to list Redirects",
+			"Check that the controller's service account may list redirects.urlshortener.cedi.dev in every namespace",
+		)
+	}
+
+	return redirects, nil
+}
+
+// List returns a list of all Redirect in the current namespace
+func (c *RedirectClient) List(ct context.Context) (*v1alpha1.RedirectList, humane.Error) {
+	ctx, span := c.tracer.Start(ct, "RedirectClient.List")
+	defer span.End()
+
+	namespace, err := currentNamespace(c.namespaceFile)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
 
-	return Redirects, nil
+	return c.ListNamespaced(ctx, namespace)
 }
 
-// List returns a list of all Redirect in the current namespace
-func (c *RedirectClient) List(ct context.Context) (*v1alpha1.RedirectList, error) {
-	ctx, span := c.tracer.Start(ct, "RedirectClient.List")
-	defer span.End()
-
-	// try to read the namespace from /var/run
-	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-	if err != nil {
-		span.RecordError(err)
-		return nil, errors.Wrap(err, "Unable to read current namespace")
-	}
-
-	return c.ListNamespaced(ctx, string(namespace))
-}
-
-// List returns a list of Redirects in a Namespace
-func (c *RedirectClient) ListNamespaced(ct context.Context, namespace string) (*v1alpha1.RedirectList, error) {
+// ListNamespaced returns a list of Redirects in a Namespace
+func (c *RedirectClient) ListNamespaced(ct context.Context, namespace string) (*v1alpha1.RedirectList, humane.Error) {
 	ctx, span := c.tracer.Start(
 		ct,
 		"RedirectClient.List",
@@ -119,63 +122,73 @@ func (c *RedirectClient) ListNamespaced(ct context.Context, namespace string) (*
 	)
 	defer span.End()
 
-	Redirects := &v1alpha1.RedirectList{}
+	redirects := &v1alpha1.RedirectList{}
 
-	err := c.client.List(ctx, Redirects, &client.ListOptions{
-		Namespace: namespace,
-	})
-	if err != nil {
+	if err := c.client.List(ctx, redirects, &client.ListOptions{Namespace: namespace}); err != nil {
 		span.RecordError(err)
-		return nil, err
+		return nil, humane.Wrap(err, fmt.Sprintf("Unable to list Redirects in namespace %s", namespace),
+			"Check that the controller's service account may list redirects.urlshortener.cedi.dev",
+		)
 	}
 
-	return Redirects, nil
+	return redirects, nil
 }
 
-// List returns a list of all Redirect that match the label Redirect with the parameter label
-// ToDo: Rewrite and come up with a better way. This only works client-side and is absolutely ugly and inefficient
-func (c *RedirectClient) Query(ct context.Context, label string) (*v1alpha1.RedirectList, error) {
+// Query returns a list of all Redirect that match the label Redirect with the parameter label
+// TODO(cedi): Rewrite and come up with a better way. This only works client-side and is absolutely ugly and inefficient
+func (c *RedirectClient) Query(ct context.Context, label string) (*v1alpha1.RedirectList, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "RedirectClient.Query", trace.WithAttributes(attribute.String("label", "Redirect"), attribute.String("labelValue", label)))
 	defer span.End()
 
-	Redirects := &v1alpha1.RedirectList{}
+	redirects := &v1alpha1.RedirectList{}
 
 	// Like `kubectl get Redirect -l Redirect=$Redirect
-	RedirectReq, _ := labels.NewRequirement("Redirect", selection.Equals, []string{label})
-	selector := labels.NewSelector()
-	selector = selector.Add(*RedirectReq)
-
-	err := c.client.List(ctx, Redirects, &client.ListOptions{
-		LabelSelector: selector,
-	})
+	redirectReq, err := labels.NewRequirement("Redirect", selection.Equals, []string{label})
 	if err != nil {
 		span.RecordError(err)
-		return nil, err
+		return nil, humane.Wrap(err, fmt.Sprintf("Invalid Redirect label %q", label),
+			"Label values must be 63 characters or less and consist of alphanumerics, '-', '_' or '.'",
+		)
 	}
 
-	return Redirects, nil
+	selector := labels.NewSelector().Add(*redirectReq)
+
+	if err := c.client.List(ctx, redirects, &client.ListOptions{LabelSelector: selector}); err != nil {
+		span.RecordError(err)
+		return nil, humane.Wrap(err, fmt.Sprintf("Unable to list Redirects labeled %q", label),
+			"Check that the controller's service account may list redirects.urlshortener.cedi.dev",
+		)
+	}
+
+	return redirects, nil
 }
 
-func (c *RedirectClient) Save(ct context.Context, Redirect *v1alpha1.Redirect) error {
-	ctx, span := c.tracer.Start(ct, "RedirectClient.Save", trace.WithAttributes(attribute.String("Redirect", Redirect.Name), attribute.String("namespace", Redirect.Namespace)))
+// Save writes the Redirect's spec and metadata
+func (c *RedirectClient) Save(ct context.Context, redirect *v1alpha1.Redirect) humane.Error {
+	ctx, span := c.tracer.Start(ct, "RedirectClient.Save", trace.WithAttributes(attribute.String("Redirect", redirect.Name), attribute.String("namespace", redirect.Namespace)))
 	defer span.End()
 
-	err := c.client.Update(ctx, Redirect)
-	if err != nil {
+	if err := c.client.Update(ctx, redirect); err != nil {
 		span.RecordError(err)
+		return humane.Wrap(err, fmt.Sprintf("Unable to update Redirect %s", redirect.Name),
+			"Check that the Redirect still exists and wasn't changed concurrently, then try again",
+		)
 	}
 
-	return err
+	return nil
 }
 
-func (c *RedirectClient) SaveStatus(ct context.Context, Redirect *v1alpha1.Redirect) error {
-	ctx, span := c.tracer.Start(ct, "RedirectClient.SaveStatus", trace.WithAttributes(attribute.String("Redirect", Redirect.Name), attribute.String("namespace", Redirect.Namespace)))
+// SaveStatus writes the Redirect's status
+func (c *RedirectClient) SaveStatus(ct context.Context, redirect *v1alpha1.Redirect) humane.Error {
+	ctx, span := c.tracer.Start(ct, "RedirectClient.SaveStatus", trace.WithAttributes(attribute.String("Redirect", redirect.Name), attribute.String("namespace", redirect.Namespace)))
 	defer span.End()
 
-	err := c.client.Status().Update(ctx, Redirect)
-	if err != nil {
+	if err := c.client.Status().Update(ctx, redirect); err != nil {
 		span.RecordError(err)
+		return humane.Wrap(err, fmt.Sprintf("Unable to update the status of Redirect %s", redirect.Name),
+			"Check that the Redirect still exists and wasn't changed concurrently, then try again",
+		)
 	}
 
-	return err
+	return nil
 }

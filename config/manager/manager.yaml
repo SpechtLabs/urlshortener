@@ -59,10 +59,10 @@ spec:
           type: RuntimeDefault
       containers:
       - command:
-        - /manager
+        - /urlshortener
         args:
-          - --leader-elect
-          - --health-probe-bind-address=:8081
+        - --leader-elect
+        - --health-probe-bind-address=:8081
         image: controller:latest
         name: manager
         ports: []

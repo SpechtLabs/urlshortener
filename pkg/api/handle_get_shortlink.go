@@ -2,15 +2,10 @@ package api
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sierrasoftworks/humane-errors-go"
-
-	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
 
 	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
@@ -36,36 +31,16 @@ func (s *UrlshortenerServer) HandleGetShortLink(ct *gin.Context) {
 
 	ctx := ct.Request.Context()
 	span := trace.SpanFromContext(ctx)
-
 	span.SetAttributes(attribute.String("shortlink", shortlinkName), attribute.String("referrer", ct.Request.Referer()))
 
 	if len(userName) == 0 {
-		err := humane.New("No user found for request",
-			"ensure you include a Bearer token in the Authorization header, e.g. Authorization: Bearer <token> or Authorization: token <token>",
-		)
-
-		otelzap.L().WithError(err).Ctx(ctx).Error(err.Error(),
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "delete"),
-		)
-
-		ct.JSON(http.StatusUnauthorized, gin.H{"error": err.Error(), "advice": err.Advice()})
+		abortWithError(ct, http.StatusUnauthorized, operationGet, newNoUserError())
 		return
 	}
 
 	shortlink, err := s.userClient.Get(ctx, userName, shortlinkName)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "not found") {
-			statusCode = http.StatusNotFound
-		}
-
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to get ShortLink",
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "get"),
-		)
-
-		ct.JSON(statusCode, gin.H{"error": err.Error()})
+		abortWithError(ct, statusFor(err), operationGet, err)
 		return
 	}
 

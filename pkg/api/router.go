@@ -2,8 +2,9 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/sierrasoftworks/humane-errors-go"
@@ -31,6 +32,15 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+const (
+	// readHeaderTimeout bounds how long a client may take to send its request
+	// headers, so slow clients can't hold connections open (Slowloris).
+	readHeaderTimeout = 10 * time.Second
+
+	// shutdownTimeout is how long requests in flight get to finish on shutdown.
+	shutdownTimeout = 5 * time.Second
+)
+
 // @title 			URL Shortener
 // @version         2.0
 // @description     A url shortener, written in Go running on Kubernetes
@@ -44,6 +54,7 @@ import (
 // @in header
 // @name Authorization
 
+// UrlshortenerServer serves the shortlink redirects and the shortlink API.
 type UrlshortenerServer struct {
 	srv        *http.Server
 	router     *gin.Engine
@@ -52,12 +63,12 @@ type UrlshortenerServer struct {
 	client     *shortlinkClient.ShortlinkClient
 }
 
-// NewGinGonicHTTPServer creates a new urlshortener API Server
-func NewGinGonicHTTPServer(client client.Client) *UrlshortenerServer {
-	sClient := shortlinkClient.NewShortlinkClient(client)
+// NewGinGonicHTTPServer creates a new urlshortener API Server, which serves on
+// addr once started.
+func NewGinGonicHTTPServer(k8sClient client.Client, addr string) *UrlshortenerServer {
+	sClient := shortlinkClient.NewShortlinkClient(k8sClient)
 
 	r := &UrlshortenerServer{
-		srv:        nil,
 		tracer:     otel.Tracer("urlshortener"),
 		userClient: shortlinkClient.NewUserShortLinkClient(sClient),
 		client:     sClient,
@@ -113,11 +124,19 @@ func NewGinGonicHTTPServer(client client.Client) *UrlshortenerServer {
 		ginprometheus.WithLowCardinalityUrl(),
 	))
 
+	r.srv = &http.Server{
+		Addr:              addr,
+		Handler:           r.router,
+		ReadHeaderTimeout: readHeaderTimeout,
+	}
+
 	docs.SwaggerInfo.BasePath = "/"
 
 	return r
 }
 
+// Load registers the routes: the shortlink redirects and Swagger UI, which are
+// public, and the API, which requires a GitHub token.
 func (s *UrlshortenerServer) Load() {
 	router := s.router
 
@@ -148,47 +167,49 @@ func (s *UrlshortenerServer) Load() {
 	v1.DELETE("/shortlink/:shortlink", s.HandleDeleteShortLink)
 }
 
-func (s *UrlshortenerServer) ServeAsync(addr string) {
-	go func() {
-		if err := s.Serve(addr); err != nil {
-			otelzap.L().WithError(err).Fatal("Unable to start proxy")
-		}
-	}()
-}
+// Start serves the shortlink redirects and the API until ctx is done, then
+// shuts the server down, giving requests in flight shutdownTimeout to
+// finish. It implements controller-runtime's manager.Runnable, so the
+// manager starts it once its caches have synced and stops it with the
+// manager.
+func (s *UrlshortenerServer) Start(ctx context.Context) error {
+	// The server goroutine ends when ListenAndServe fails or when Shutdown below
+	// stops it; Start waits for it either way.
+	var serving sync.WaitGroup
+	defer serving.Wait()
 
-func (s *UrlshortenerServer) Serve(addr string) humane.Error {
-	otelzap.L().Info("Starting urlshortener server", zap.String("address", addr))
+	otelzap.L().InfoContext(ctx, "serving shortlinks and the API", zap.String("address", s.srv.Addr))
 
-	// configure the HTTP Server
-	s.srv = &http.Server{
-		Addr:    addr,
-		Handler: s.router,
+	serveErr := make(chan error, 1)
+	serving.Go(func() {
+		serveErr <- s.srv.ListenAndServe()
+	})
+
+	select {
+	case err := <-serveErr:
+		return humane.Wrap(err, fmt.Sprintf("Unable to serve on %s", s.srv.Addr),
+			"Make sure no other process listens on the --bind-address and try again.",
+		)
+
+	case <-ctx.Done():
 	}
 
-	if err := s.srv.ListenAndServe(); err != nil {
-		if strings.Contains(err.Error(), http.ErrServerClosed.Error()) {
-			otelzap.L().Info("API server stopped", zap.String("addr", s.srv.Addr))
-			return nil
-		}
-
-		return humane.Wrap(err, "Unable to start API Server", "Make sure the api server is not already running and try again.")
-	}
-
-	return nil
-}
-
-func (s *UrlshortenerServer) Shutdown(ctx context.Context) humane.Error {
-	if s.srv == nil {
-		return humane.New("Unable to shutdown server. It is not running.", "Start server first before attempting to stop it")
-	}
-
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
 
-	otelzap.L().Info("shutting down proxy")
-	if err := s.srv.Shutdown(timeoutCtx); err != nil {
-		return humane.Wrap(err, "Unable to shutdown server", "Make sure the server is running and try again.")
+	if err := s.srv.Shutdown(shutdownCtx); err != nil {
+		return humane.Wrap(err, "Unable to shut the server down gracefully",
+			fmt.Sprintf("Requests still in flight after %s were cut off.", shutdownTimeout),
+		)
 	}
 
+	otelzap.L().DebugContext(ctx, "server stopped", zap.String("address", s.srv.Addr))
+
 	return nil
+}
+
+// NeedLeaderElection reports that every replica serves, not only the leader.
+// It implements controller-runtime's manager.LeaderElectionRunnable.
+func (s *UrlshortenerServer) NeedLeaderElection() bool {
+	return false
 }

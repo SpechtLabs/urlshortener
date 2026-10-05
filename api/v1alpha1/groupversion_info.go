@@ -29,7 +29,12 @@ var (
 	GroupVersion = schema.GroupVersion{Group: "urlshortener.cedi.dev", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme.
-	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+	// Every root type of the group is registered here, in the variable's
+	// initializer, rather than by an init function in each type's file.
+	SchemeBuilder = (&scheme.Builder{GroupVersion: GroupVersion}).Register(
+		&Redirect{}, &RedirectList{},
+		&Shortlink{}, &ShortlinkList{},
+	)
 
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme

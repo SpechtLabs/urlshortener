@@ -57,7 +57,7 @@ type ShortlinkStatus struct {
 	// +kubebuilder:validation:Minimum=0
 	Count int `json:"count"`
 
-	//LastModified is a date-time when the ShortLink was last modified
+	// LastModified is a date-time when the ShortLink was last modified
 	// +kubebuilder:validation:Format:date-time
 	// +kubebuilder:validation:Optional
 	LastModified string `json:"lastmodified"`
@@ -92,10 +92,6 @@ type ShortlinkList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Shortlink `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&Shortlink{}, &ShortlinkList{})
 }
 
 // +kubebuilder:object:root=false

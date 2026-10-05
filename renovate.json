@@ -1,46 +1,215 @@
 {
-    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-    "extends": [
-      "config:recommended"
-    ],
-    "packageRules": [
-      {
-        "description": "Automatically merge minor and patch-level updates",
-        "matchUpdateTypes": [
-          "patch",
-          "bump",
-          "minor"
-        ],
-        "automerge": true,
-        "automergeType": "branch"
-      },
-      {
-        "description": "Automatically merge updates to GitHub workflows",
-        "matchUpdateTypes": [
-          "patch",
-          "bump",
-          "minor",
-          "major"
-        ],
-        "automerge": true,
-        "matchFileNames": [
-          ".github/**",
-          ".github/workflows/**"
-        ],
-        "automergeType": "branch"
-      },
-      {
-        "description": "Request review for major updates",
-        "matchUpdateTypes": [
-          "major"
-        ],
-        "automerge": false,
-        "labels": [
-          "update/major"
-        ],
-        "assignees": [
-          "cedi"
-        ]
-      }
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    "helpers:pinGitHubActionDigests",
+    "customManagers:githubActionsVersions"
+  ],
+  "timezone": "Europe/Berlin",
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Dependency Dashboard",
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 8,
+  "rebaseWhen": "behind-base-branch",
+  "rangeStrategy": "bump",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "labels": [
+    "dependencies"
+  ],
+  "ignorePaths": [
+    "**/node_modules/**"
+  ],
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "labels": [
+      "dependencies",
+      "security"
     ]
-  }
+  },
+  "postUpdateOptions": [
+    "gomodTidy",
+    "gomodUpdateImportPaths"
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ],
+    "automerge": true
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the Go toolchain version pinned in .mise.toml.",
+      "managerFilePatterns": [
+        "/(^|/)\\.mise\\.toml$/"
+      ],
+      "matchStrings": [
+        "(?:^|\\n)go\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\""
+      ],
+      "depNameTemplate": "go",
+      "packageNameTemplate": "go",
+      "datasourceTemplate": "golang-version",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the golangci-lint version the custom-gcl binary is built from.",
+      "managerFilePatterns": [
+        "/(^|/)\\.custom-gcl\\.yml$/"
+      ],
+      "matchStrings": [
+        "(?:^|\\n)version:\\s*\"?(?<currentValue>v\\d+\\.\\d+\\.\\d+)\"?"
+      ],
+      "depNameTemplate": "golangci-lint",
+      "packageNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the golint-sl plugin version baked into custom-gcl.",
+      "managerFilePatterns": [
+        "/(^|/)\\.custom-gcl\\.yml$/"
+      ],
+      "matchStrings": [
+        "module:\\s*\"(?<depName>github\\.com/spechtlabs/golint-sl)\"\\s*\\n\\s*version:\\s*\"(?<currentValue>v[^\"]+)\""
+      ],
+      "datasourceTemplate": "go",
+      "versioningTemplate": "semver"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "mise is pinned as MISE_VERSION in every workflow that sets it up; move them at once, and only to a release a day old, the age mise-action waited for before the pin.",
+      "matchDepNames": [
+        "jdx/mise"
+      ],
+      "groupName": "mise",
+      "groupSlug": "mise",
+      "minimumReleaseAge": "1 day"
+    },
+    {
+      "description": "Automerge digest, pin, patch, and minor updates once CI passes.",
+      "matchUpdateTypes": [
+        "digest",
+        "pin",
+        "pinDigest",
+        "patch",
+        "minor"
+      ],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Keep major updates explicit.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false,
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Group GitHub Actions updates together.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions",
+      "groupSlug": "github-actions",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "dependencyDashboardApproval": false
+    },
+    {
+      "description": "Group Go module updates together.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "groupName": "Go modules",
+      "groupSlug": "go-modules"
+    },
+    {
+      "description": "The Kubernetes libraries move in lockstep (k8s.io/api, apimachinery and client-go share a version, and controller-runtime pins the minor it supports), and a new minor often needs code changes. Keep them out of the Go modules group so they can't hold every other bump back.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "k8s.io/**",
+        "sigs.k8s.io/**"
+      ],
+      "groupName": "Kubernetes libraries",
+      "groupSlug": "kubernetes"
+    },
+    {
+      "description": "The golang build image in the Dockerfile follows the Go toolchain in .mise.toml.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchDepNames": [
+        "golang",
+        "docker.io/library/golang"
+      ],
+      "groupName": "Go toolchain",
+      "groupSlug": "go-toolchain"
+    },
+    {
+      "description": "Update the .mise.toml Go version and the golang build image together.",
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
+      "groupName": "Go toolchain",
+      "groupSlug": "go-toolchain",
+      "rangeStrategy": "bump",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "dependencyDashboardApproval": false
+    },
+    {
+      "description": "Leave the go directive in go.mod alone. It is the minimum language version, not the toolchain; bumping it to a full patch version (1.27 -> 1.27.1) is pointless churn. The toolchain is the pin in .mise.toml.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "golang"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "golangci-lint is pinned in .mise.toml and .custom-gcl.yml; the two must never disagree.",
+      "matchDepNames": [
+        "golangci-lint"
+      ],
+      "groupName": "golangci-lint",
+      "groupSlug": "golangci-lint"
+    },
+    {
+      "description": "golint-sl is pinned in .custom-gcl.yml and .pre-commit-config.yaml; move both at once.",
+      "matchPackageNames": [
+        "/golint-sl$/i"
+      ],
+      "groupName": "golint-sl",
+      "groupSlug": "golint-sl"
+    },
+    {
+      "description": "The commit message check must parse with the release-please version the release-please action bundles (see its package-lock.json), not the newest one. Bump it by hand alongside the action.",
+      "matchFileNames": [
+        ".github/commit-lint/package.json"
+      ],
+      "matchPackageNames": [
+        "release-please"
+      ],
+      "enabled": false
+    }
+  ]
+}

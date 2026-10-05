@@ -2,9 +2,9 @@ package client
 
 import (
 	"context"
-	"os"
+	"fmt"
 
-	"github.com/pkg/errors"
+	"github.com/sierrasoftworks/humane-errors-go"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,41 +20,42 @@ import (
 type ShortlinkClient struct {
 	client client.Client
 	tracer trace.Tracer
+	settings
 }
 
 // NewShortlinkClient creates a new shortlink Client
-func NewShortlinkClient(client client.Client) *ShortlinkClient {
+func NewShortlinkClient(k8sClient client.Client, opts ...Option) *ShortlinkClient {
 	return &ShortlinkClient{
-		client: client,
-		tracer: otel.Tracer("urlshortener"),
+		client:   k8sClient,
+		tracer:   otel.Tracer("urlshortener"),
+		settings: newSettings(opts),
 	}
 }
 
 // Get returns a ShortLink in the current namespace
-func (c *ShortlinkClient) Get(ct context.Context, name string) (*v1alpha1.Shortlink, error) {
+func (c *ShortlinkClient) Get(ct context.Context, name string) (*v1alpha1.Shortlink, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "ShortlinkClient.Get", trace.WithAttributes(attribute.String("name", name)))
 	defer span.End()
 
-	// try to read the namespace from /var/run
-	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	namespace, err := currentNamespace(c.namespaceFile)
 	if err != nil {
 		span.RecordError(err)
-		return nil, errors.Wrap(err, "Unable to read current namespace")
+		return nil, err
 	}
 
-	return c.GetNamespaced(ctx, types.NamespacedName{Name: name, Namespace: string(namespace)})
+	return c.GetNamespaced(ctx, types.NamespacedName{Name: name, Namespace: namespace})
 }
 
 // GetNameNamespace returns a Shortlink for a given name in a given namespace
-func (c *ShortlinkClient) GetNameNamespace(ct context.Context, name, namespace string) (*v1alpha1.Shortlink, error) {
+func (c *ShortlinkClient) GetNameNamespace(ct context.Context, name, namespace string) (*v1alpha1.Shortlink, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "ShortlinkClient.GetNameNamespace", trace.WithAttributes(attribute.String("name", name), attribute.String("namespace", namespace)))
 	defer span.End()
 
 	return c.GetNamespaced(ctx, types.NamespacedName{Name: name, Namespace: namespace})
 }
 
-// Get returns a Shortlink
-func (c *ShortlinkClient) GetNamespaced(ct context.Context, nameNamespaced types.NamespacedName) (*v1alpha1.Shortlink, error) {
+// GetNamespaced returns a Shortlink
+func (c *ShortlinkClient) GetNamespaced(ct context.Context, nameNamespaced types.NamespacedName) (*v1alpha1.Shortlink, humane.Error) {
 	ctx, span := c.tracer.Start(
 		ct, "ShortlinkClient.GetNamespaced",
 		trace.WithAttributes(
@@ -68,29 +69,30 @@ func (c *ShortlinkClient) GetNamespaced(ct context.Context, nameNamespaced types
 
 	if err := c.client.Get(ctx, nameNamespaced, shortlink); err != nil {
 		span.RecordError(err)
-		return nil, err
+		return nil, humane.Wrap(err, fmt.Sprintf("Unable to get ShortLink %s", nameNamespaced),
+			"Check that the ShortLink exists and the server's service account may read shortlinks.urlshortener.cedi.dev",
+		)
 	}
 
 	return shortlink, nil
 }
 
 // List returns a list of all Shortlinks in the current namespace
-func (c *ShortlinkClient) List(ct context.Context) (*v1alpha1.ShortlinkList, error) {
+func (c *ShortlinkClient) List(ct context.Context) (*v1alpha1.ShortlinkList, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "ShortlinkClient.List")
 	defer span.End()
 
-	// try to read the namespace from /var/run
-	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	namespace, err := currentNamespace(c.namespaceFile)
 	if err != nil {
 		span.RecordError(err)
-		return nil, errors.Wrap(err, "Unable to read current namespace")
+		return nil, err
 	}
 
-	return c.ListNamespaced(ctx, string(namespace))
+	return c.ListNamespaced(ctx, namespace)
 }
 
 // ListNamespaced returns a list of all Shortlinks in a namespace
-func (c *ShortlinkClient) ListNamespaced(ct context.Context, namespace string) (*v1alpha1.ShortlinkList, error) {
+func (c *ShortlinkClient) ListNamespaced(ct context.Context, namespace string) (*v1alpha1.ShortlinkList, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "ShortlinkClient.ListNamespaced", trace.WithAttributes(attribute.String("namespace", namespace)))
 	defer span.End()
 
@@ -98,81 +100,96 @@ func (c *ShortlinkClient) ListNamespaced(ct context.Context, namespace string) (
 
 	if err := c.client.List(ctx, shortlinks, &client.ListOptions{Namespace: namespace}); err != nil {
 		span.RecordError(err)
-		return nil, err
+		return nil, humane.Wrap(err, fmt.Sprintf("Unable to list ShortLinks in namespace %s", namespace),
+			"Check that the server's service account may list shortlinks.urlshortener.cedi.dev",
+		)
 	}
 
 	return shortlinks, nil
 }
 
-func (c *ShortlinkClient) Update(ct context.Context, shortlink *v1alpha1.Shortlink) error {
+// Update writes the ShortLink's spec and metadata
+func (c *ShortlinkClient) Update(ct context.Context, shortlink *v1alpha1.Shortlink) humane.Error {
 	ctx, span := c.tracer.Start(ct, "ShortlinkClient.Update", trace.WithAttributes(attribute.String("shortlink", shortlink.Name), attribute.String("namespace", shortlink.Namespace)))
 	defer span.End()
 
 	if err := c.client.Update(ctx, shortlink); err != nil {
 		span.RecordError(err)
-		return err
+		return humane.Wrap(err, fmt.Sprintf("Unable to update ShortLink %s", shortlink.Name),
+			"Check that the ShortLink still exists and wasn't changed concurrently, then try again",
+		)
 	}
 
 	return nil
 }
 
-func (c *ShortlinkClient) UpdateStatus(ct context.Context, shortlink *v1alpha1.Shortlink) error {
+// UpdateStatus writes the ShortLink's status
+func (c *ShortlinkClient) UpdateStatus(ct context.Context, shortlink *v1alpha1.Shortlink) humane.Error {
 	ctx, span := c.tracer.Start(ct, "ShortlinkClient.UpdateStatus", trace.WithAttributes(attribute.String("shortlink", shortlink.Name), attribute.String("namespace", shortlink.Namespace)))
 	defer span.End()
 
-	err := c.client.Status().Update(ctx, shortlink)
-	if err != nil {
-		span.RecordError(err)
-	}
-
-	return err
-}
-
-func (c *ShortlinkClient) IncrementInvocationCount(ct context.Context, shortlink *v1alpha1.Shortlink) error {
-	ctx, span := c.tracer.Start(ct, "ShortlinkClient.IncrementInvocationCount", trace.WithAttributes(attribute.String("shortlink", shortlink.Name), attribute.String("namespace", shortlink.Namespace)))
-	defer span.End()
-
-	shortlink.Status.Count = shortlink.Status.Count + 1
-
 	if err := c.client.Status().Update(ctx, shortlink); err != nil {
 		span.RecordError(err)
-		return err
+		return humane.Wrap(err, fmt.Sprintf("Unable to update the status of ShortLink %s", shortlink.Name),
+			"Check that the ShortLink still exists and wasn't changed concurrently, then try again",
+		)
 	}
 
 	return nil
 }
 
-func (c *ShortlinkClient) Delete(ct context.Context, shortlink *v1alpha1.Shortlink) error {
+// IncrementInvocationCount counts one more invocation in the ShortLink's status
+func (c *ShortlinkClient) IncrementInvocationCount(ct context.Context, shortlink *v1alpha1.Shortlink) humane.Error {
+	ctx, span := c.tracer.Start(ct, "ShortlinkClient.IncrementInvocationCount", trace.WithAttributes(attribute.String("shortlink", shortlink.Name), attribute.String("namespace", shortlink.Namespace)))
+	defer span.End()
+
+	shortlink.Status.Count++
+
+	if err := c.client.Status().Update(ctx, shortlink); err != nil {
+		span.RecordError(err)
+		return humane.Wrap(err, fmt.Sprintf("Unable to count the invocation of ShortLink %s", shortlink.Name),
+			"The redirect was served; only its count in the ShortLink's status is missing",
+		)
+	}
+
+	return nil
+}
+
+// Delete deletes the ShortLink
+func (c *ShortlinkClient) Delete(ct context.Context, shortlink *v1alpha1.Shortlink) humane.Error {
 	ctx, span := c.tracer.Start(ct, "ShortlinkClient.Delete", trace.WithAttributes(attribute.String("name", shortlink.Name), attribute.String("namespace", shortlink.Namespace)))
 	defer span.End()
 
 	if err := c.client.Delete(ctx, shortlink); err != nil {
 		span.RecordError(err)
-		return err
+		return humane.Wrap(err, fmt.Sprintf("Unable to delete ShortLink %s", shortlink.Name),
+			"Check that the ShortLink still exists and the server's service account may delete shortlinks.urlshortener.cedi.dev",
+		)
 	}
 
 	return nil
 }
 
-func (c *ShortlinkClient) Create(ct context.Context, shortlink *v1alpha1.Shortlink) error {
+// Create creates the ShortLink, in the current namespace unless it names one
+func (c *ShortlinkClient) Create(ct context.Context, shortlink *v1alpha1.Shortlink) humane.Error {
 	ctx, span := c.tracer.Start(ct, "ShortlinkClient.Create", trace.WithAttributes(attribute.String("shortlink", shortlink.Name), attribute.String("namespace", shortlink.Namespace)))
 	defer span.End()
 
 	if shortlink.Namespace == "" {
-		// try to read the namespace from /var/run
-		namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+		namespace, err := currentNamespace(c.namespaceFile)
 		if err != nil {
 			span.RecordError(err)
-			return errors.Wrap(err, "Unable to read current namespace")
+			return err
 		}
 
-		shortlink.Namespace = string(namespace)
+		shortlink.Namespace = namespace
 	}
 
-	// if not exists, create a new one
 	if err := c.client.Create(ctx, shortlink); err != nil {
 		span.RecordError(err)
-		return err
+		return humane.Wrap(err, fmt.Sprintf("Unable to create ShortLink %s", shortlink.Name),
+			"Check that no ShortLink of that name exists yet and the spec is valid",
+		)
 	}
 
 	return nil
