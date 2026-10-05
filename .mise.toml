@@ -57,8 +57,11 @@ run = "go build -o bin/urlshortener ./cmd"
 # setup-envtest downloads them once into bin/envtest, for the Kubernetes minor
 # that k8s.io/api in go.mod targets (v0.33.x is Kubernetes 1.33). The e2e
 # suite needs a kind cluster and isn't part of this; see test-e2e.
+# The script needs pipefail, which CI's sh (dash) doesn't have, so it runs
+# under bash.
 [tasks.test]
 description = "Run the unit and controller tests with race detector and coverage"
+shell = "bash -c"
 run = """
 set -euo pipefail
 k8s="$(go list -m k8s.io/api | awk '{ split($2, v, "."); printf "1.%d", v[2] }')"
