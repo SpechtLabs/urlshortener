@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -28,11 +27,11 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/pkg/errors"
+	"github.com/sierrasoftworks/humane-errors-go"
 	"github.com/spechtlabs/go-otel-utils/otelzap"
 
 	v1alpha1 "github.com/spechtlabs/urlshortener/api/v1alpha1"
@@ -49,10 +48,10 @@ type RedirectReconciler struct {
 }
 
 // NewRedirectReconciler returns a new RedirectReconciler
-func NewRedirectReconciler(client client.Client, scheme *runtime.Scheme) *RedirectReconciler {
+func NewRedirectReconciler(k8sClient client.Client, scheme *runtime.Scheme) *RedirectReconciler {
 	return &RedirectReconciler{
-		client:  client,
-		rClient: rClient.NewRedirectClient(client),
+		client:  k8sClient,
+		rClient: rClient.NewRedirectClient(k8sClient),
 		scheme:  scheme,
 		tracer:  otel.Tracer("urlshortener"),
 	}
@@ -61,6 +60,7 @@ func NewRedirectReconciler(client client.Client, scheme *runtime.Scheme) *Redire
 // +kubebuilder:rbac:groups=urlshortener.cedi.dev,resources=redirects,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=urlshortener.cedi.dev,resources=redirects/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=urlshortener.cedi.dev,resources=redirects/finalizers,verbs=update
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -71,10 +71,7 @@ func NewRedirectReconciler(client client.Client, scheme *runtime.Scheme) *Redire
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	startTime := time.Now()
-	defer func() {
-		reconcilerDuration.WithLabelValues("redirect", req.Name, req.Namespace).Observe(float64(time.Since(startTime).Microseconds()))
-	}()
+	defer timeReconcile("redirect", req).ObserveDuration()
 
 	span := trace.SpanFromContext(ctx)
 
@@ -95,31 +92,24 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	redirect, err := r.rClient.GetNamespaced(ctx, req.NamespacedName)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			otelzap.L().WithError(err).Ctx(ctx).Info("Redirect resource not found. Ignoring since object must be deleted",
-				zap.String("name", "reconciler"),
-				zap.String("redirect", req.String()),
-			)
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
+			otelzap.L().WithError(err).DebugContext(ctx, "Redirect resource not found. Ignoring since object must be deleted",
+				zap.String("name", "reconciler"),
+				zap.String("redirect", req.String()),
+			)
 			return ctrl.Result{}, nil
 		}
 
 		// Error reading the object - requeue the request.
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to fetch Redirect resource",
-			zap.String("name", "reconciler"),
-			zap.String("redirect", req.String()),
-		)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.fail(ctx, req, err)
 	}
 
-	// Check if the ingress already exists, if not create a new one
+	// Create the ingress, or bring the existing one in line with the Redirect
 	ingress, err := r.upsertRedirectIngress(ctx, redirect)
 	if err != nil {
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to upsert redirect ingress",
-			zap.String("name", "reconciler"),
-			zap.String("redirect", req.String()),
-		)
+		return ctrl.Result{}, r.fail(ctx, req, err)
 	}
 
 	// Update the Redirect status with the ingress name and the target
@@ -129,44 +119,55 @@ func (r *RedirectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		client.MatchingLabels(GetLabelsForRedirect(redirect.Name)),
 	}
 
-	if err = r.client.List(ctx, ingressList, listOpts...); err != nil {
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to list ingresses",
-			zap.String("name", "reconciler"),
-			zap.String("redirect", req.String()),
-		)
-		return ctrl.Result{}, err
+	if err := r.client.List(ctx, ingressList, listOpts...); err != nil {
+		return ctrl.Result{}, r.fail(ctx, req, humane.Wrap(err, "Failed to list the Redirect's ingresses",
+			"Check that the controller's service account may list ingresses.networking.k8s.io",
+		))
 	}
 
-	// Update status.Nodes if needed
 	redirect.Status.IngressName = GetIngressNames(ingressList.Items)
-	redirect.Status.Target = ingress.Annotations["nginx.ingress.kubernetes.io/permanent-redirect"]
-	err = r.client.Status().Update(ctx, redirect)
-	if err != nil {
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to update Redirect status",
-			zap.String("name", "reconciler"),
-			zap.String("redirect", req.String()),
-		)
-		return ctrl.Result{}, err
+	redirect.Status.Target = ingress.Annotations[permanentRedirectAnnotation]
+	if err := r.rClient.SaveStatus(ctx, redirect); err != nil {
+		return ctrl.Result{}, r.fail(ctx, req, err)
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *RedirectReconciler) upsertRedirectIngress(ctx context.Context, redirect *v1alpha1.Redirect) (*networkingv1.Ingress, error) {
-	ingress := &networkingv1.Ingress{}
-	err := r.client.Get(ctx, types.NamespacedName{Name: redirect.Name, Namespace: redirect.Namespace}, ingress)
-	ingress = UpdateRedirectIngress(ingress, redirect, r.scheme)
+// fail logs a reconcile error and returns it, so controller-runtime requeues
+// the request.
+func (r *RedirectReconciler) fail(ctx context.Context, req ctrl.Request, err humane.Error) humane.Error {
+	span := trace.SpanFromContext(ctx)
+	span.RecordError(err)
+	span.SetAttributes(attribute.StringSlice("error.advice", err.Advice()))
 
-	if err != nil && k8serrors.IsNotFound(err) {
-		if err := r.client.Create(ctx, ingress); err != nil {
-			return nil, errors.Wrap(err, "Failed to create new Ingress")
-		}
-	} else if err != nil {
-		return nil, errors.Wrap(err, "Failed to get redirect Ingress")
+	otelzap.L().WithError(err).ErrorContext(ctx, err.Error(),
+		zap.String("name", "reconciler"),
+		zap.String("redirect", req.String()),
+	)
+
+	return err
+}
+
+// upsertRedirectIngress creates the Redirect's Ingress, or updates the one
+// that exists, and returns it as it is in the cluster.
+func (r *RedirectReconciler) upsertRedirectIngress(ctx context.Context, redirect *v1alpha1.Redirect) (*networkingv1.Ingress, humane.Error) {
+	ingress := &networkingv1.Ingress{
+		Name: redirect.Name, Namespace: redirect.Namespace,
 	}
 
-	if err := r.client.Update(ctx, ingress); err != nil {
-		return nil, errors.Wrap(err, "Failed to update redirect Ingress")
+	var mutateErr humane.Error
+	if _, err := controllerutil.CreateOrUpdate(ctx, r.client, ingress, func() error {
+		mutateErr = UpdateRedirectIngress(ingress, redirect, r.scheme)
+		return mutateErr
+	}); err != nil {
+		if mutateErr != nil {
+			return nil, mutateErr
+		}
+
+		return nil, humane.Wrap(err, "Failed to create or update the redirect Ingress",
+			"Check that the controller's service account may create and update ingresses.networking.k8s.io",
+		)
 	}
 
 	return ingress, nil

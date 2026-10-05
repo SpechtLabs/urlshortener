@@ -1,9 +1,28 @@
-[![GitHub license](https://img.shields.io/github/license/cedi/urlshortener.svg)](https://github.com/urlshortener-cedi-dev/urlshortener/blob/main/LICENSE)
-[![GitHub go.mod Go version of a Go module](https://img.shields.io/github/go-mod/go-version/cedi/urlshortener.svg)](https://github.com/urlshortener-cedi-dev/urlshortener)
-[![GoDoc reference example](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/urlshortener-cedi-dev/urlshortener)
-[![GoReportCard example](https://goreportcard.com/badge/github.com/urlshortener-cedi-dev/urlshortener)](https://goreportcard.com/report/github.com/urlshortener-cedi-dev/urlshortener)
-[![Go Build & Docker Build](https://github.com/SpechtLabs/urlshortener/actions/workflows/build.yaml/badge.svg)](https://github.com/SpechtLabs/urlshortener/actions/workflows/build.yaml)
-[![Go Release](https://github.com/SpechtLabs/urlshortener/actions/workflows/release.yaml/badge.svg)](https://github.com/SpechtLabs/urlshortener/actions/workflows/release.yaml)
+# urlshortener
+
+[![CI](https://github.com/SpechtLabs/urlshortener/actions/workflows/ci.yaml/badge.svg)](https://github.com/SpechtLabs/urlshortener/actions/workflows/ci.yaml)
+[![Release](https://github.com/SpechtLabs/urlshortener/actions/workflows/release.yaml/badge.svg)](https://github.com/SpechtLabs/urlshortener/actions/workflows/release.yaml)
+[![codecov](https://codecov.io/gh/SpechtLabs/urlshortener/graph/badge.svg)](https://codecov.io/gh/SpechtLabs/urlshortener)
+[![GoDoc reference](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/spechtlabs/urlshortener)
+
+A URL shortener for Kubernetes. One binary runs the controller for the
+`Redirect` and `Shortlink` resources (`urlshortener.cedi.dev/v1alpha1`), serves
+the shortlink redirects and the shortlink API that
+[urlshortener-ui](https://github.com/SpechtLabs/urlshortener-ui) talks to.
+
+The image is published to `ghcr.io/spechtlabs/urlshortener`: `main` for every
+commit on main, and the version and `latest` for every release.
+
+## Development
+
+Every tool is pinned in `.mise.toml`; `mise install` installs them.
+
+```sh
+mise run check      # what CI runs: lint, go.mod, generated files, tests
+mise run generate   # regenerate deepcopy methods, CRDs and RBAC after API changes
+mise run image      # build the container image for the local platform
+mise tasks          # everything else
+```
 
 ## Contributing / Pull Requests
 

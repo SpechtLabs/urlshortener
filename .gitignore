@@ -28,3 +28,11 @@ go.work
 *~
 .DS_Store
 manager
+
+# golangci-lint with golint-sl baked in (mise run lint-build)
+custom-gcl
+# Coverage profile (mise run test)
+coverage.txt
+
+### Commit message check ###
+.github/commit-lint/node_modules/

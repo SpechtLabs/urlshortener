@@ -54,23 +54,8 @@ func (s *UrlshortenerServer) HandleShortLink(ct *gin.Context) {
 
 	shortlink, err := s.client.Get(ctx, shortlinkName)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			otelzap.L().WithError(err).Ctx(ctx).Error("Path not found",
-				zap.String("shortlink", shortlinkName),
-				zap.String("operation", "shortlink"),
-			)
-
-			span.SetAttributes(attribute.String("path", ct.Request.URL.Path))
-
-			ct.HTML(http.StatusNotFound, "404.html", gin.H{})
-		} else {
-			otelzap.L().WithError(err).Ctx(ctx).Error("Failed to get ShortLink",
-				zap.String("shortlink", shortlinkName),
-				zap.String("operation", "shortlink"),
-			)
-
-			ct.HTML(http.StatusInternalServerError, "500.html", gin.H{})
-		}
+		span.SetAttributes(attribute.String("path", ct.Request.URL.Path))
+		renderError(ct, statusFor(err), err)
 		return
 	}
 
@@ -108,7 +93,10 @@ func (s *UrlshortenerServer) HandleShortLink(ct *gin.Context) {
 	}
 
 	// Increase hit counter
-	if err := s.client.IncrementInvocationCount(ct, shortlink); err != nil {
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to increment invocation count")
+	if err := s.client.IncrementInvocationCount(ctx, shortlink); err != nil {
+		otelzap.L().WithError(err).WarnContext(ctx, err.Error(),
+			zap.String("shortlink", shortlinkName),
+			zap.String("operation", "shortlink"),
+		)
 	}
 }

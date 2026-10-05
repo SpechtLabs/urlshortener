@@ -1,8 +1,9 @@
-# More info: https://docs.docker.com/engine/reference/builder/#dockerignore-file
-# Ignore build and test binaries.
+# The build context is the repository; only go.mod, go.sum, the Go packages
+# and html/ reach the image (see the COPY lines in the Dockerfile).
+.git/
 bin/
-testbin/
+dist/
+custom-gcl
+coverage.txt
 *.md
-*.bkp
-*.dtmp
 *.drawio

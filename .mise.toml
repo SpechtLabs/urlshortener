@@ -1,0 +1,202 @@
+# .mise.toml — local tooling, exact pins (repo convention)
+#
+# The tasks below define how urlshortener is built and checked. CI uses these
+# tasks. Renovate keeps every pin in this file current.
+
+[settings]
+# The pins below are the only source of tool versions. Without this, mise
+# reads the go directive of go.mod (the minimum language version) and runs
+# that Go instead of the pin.
+idiomatic_version_file_enable_tools = []
+
+[tools]
+# Keep in lockstep with the golang build image in the Dockerfile; Renovate
+# bumps both together. The go directive in go.mod (minimum language version)
+# is bumped by hand.
+go = "1.27.1"
+
+# Pre-commit for Git hooks
+pre-commit = "4.6.2"
+
+# Linters. golangci-lint must match the version in .custom-gcl.yml; Renovate
+# groups the two into one PR.
+golangci-lint = "2.14.0"
+yamllint = "1.38.0"
+actionlint = "1.7.12"
+# actionlint runs shellcheck on every `run:` script when it's on PATH, and
+# silently skips them when it isn't.
+shellcheck = "0.11.0"
+
+# Kubernetes code generation and tests: controller-gen writes the deepcopy
+# methods, the CRDs and the RBAC role (see the generate task), and
+# setup-envtest fetches the kube-apiserver and etcd the controller tests run
+# against (see the test task).
+"github:kubernetes-sigs/controller-tools" = { version = "0.22.0", bin = "controller-gen" }
+setup-envtest = "0.25.2"
+# Deploying to a cluster and the e2e suite (see the install, deploy and
+# test-e2e tasks), which run against the cluster of the current kube context.
+kustomize = "5.8.2"
+kubectl = "1.37.1"
+kind = "0.33.0"
+
+# Signs the container images the release workflow publishes (keyless, through
+# the workflow's OIDC identity).
+cosign = "3.1.3"
+
+# Pins GitHub Actions to commit SHAs (see the update-gha task)
+pinact = "5.0.0"
+
+# Runs the commit message check in .github/commit-lint (pr-hygiene.yaml).
+bun = "1.4.2"
+
+[tasks.build]
+description = "Build the urlshortener binary into bin/"
+run = "go build -o bin/urlshortener ./cmd"
+
+# The controller tests start a kube-apiserver and etcd through envtest.
+# setup-envtest downloads them once into bin/envtest, for the Kubernetes minor
+# that k8s.io/api in go.mod targets (v0.33.x is Kubernetes 1.33). The e2e
+# suite needs a kind cluster and isn't part of this; see test-e2e.
+[tasks.test]
+description = "Run the unit and controller tests with race detector and coverage"
+run = """
+set -euo pipefail
+k8s="$(go list -m k8s.io/api | awk '{ split($2, v, "."); printf "1.%d", v[2] }')"
+KUBEBUILDER_ASSETS="$(setup-envtest use "${k8s}" --bin-dir "${PWD}/bin/envtest" -p path)"
+export KUBEBUILDER_ASSETS
+go test -race -covermode=atomic -coverprofile=coverage.txt $(go list ./... | grep -v /test/e2e)
+"""
+
+[tasks.test-e2e]
+description = "Build the image, load it into the kind cluster of the current kube context and run the end-to-end tests there"
+run = "go test ./test/e2e/ -v -ginkgo.v"
+
+[tasks.install]
+description = "Install the CRDs into the cluster of the current kube context"
+run = "kustomize build config/crd | kubectl apply -f -"
+
+[tasks.uninstall]
+description = "Remove the CRDs from the cluster of the current kube context"
+run = "kustomize build config/crd | kubectl delete --ignore-not-found -f -"
+
+# Sets the image in config/manager/kustomization.yaml, as kubebuilder's deploy
+# target did.
+[tasks.deploy]
+description = "Deploy the controller with the given image (default urlshortener:dev) to the cluster of the current kube context"
+usage = 'arg "[image]" default="urlshortener:dev"'
+run = [
+  "cd config/manager && kustomize edit set image controller=${usage_image}",
+  "kustomize build config/default | kubectl apply -f -",
+]
+
+[tasks.undeploy]
+description = "Remove the controller from the cluster of the current kube context"
+run = "kustomize build config/default | kubectl delete --ignore-not-found -f -"
+
+# `mise run fmt` rewrites everything that has a canonical form; `mise run
+# lint` checks the same things without touching a file.
+[tasks.fmt]
+description = "Format everything: go.mod and Go sources"
+run = [
+  { task = "go-tidy" },
+  { task = "go-fmt" },
+]
+
+[tasks.go-tidy]
+description = "Tidy go.mod and go.sum"
+run = "go mod tidy"
+
+# The same gofmt and goimports settings `mise run lint` checks, read from
+# .golangci.yaml.
+[tasks.go-fmt]
+description = "Format Go sources with the formatters configured for golangci-lint"
+run = "golangci-lint fmt"
+
+# Everything controller-gen writes: the deepcopy methods in api/v1alpha1,
+# the CRDs in config/crd/bases and the manager's role in config/rbac/role.yaml.
+[tasks.generate]
+description = "Regenerate the deepcopy methods, CRDs and RBAC role"
+run = [
+  "controller-gen object:headerFile=hack/boilerplate.go.txt paths=./...",
+  "controller-gen rbac:roleName=manager-role crd webhook paths=./... output:crd:artifacts:config=config/crd/bases",
+]
+
+# The generated files are committed, so a change to the API types or the
+# kubebuilder markers that wasn't regenerated has to fail CI. The check
+# compares the tree before and after generating, so it also works on a
+# working tree with uncommitted changes.
+[tasks.generate-check]
+description = "Check that the generated code, CRDs and RBAC role are current"
+run = [
+  "mkdir -p bin && { git diff -- api config; git status --porcelain -- api config; } > bin/generate-before.txt",
+  { task = "generate" },
+  """
+{ git diff -- api config; git status --porcelain -- api config; } > bin/generate-after.txt
+if ! cmp -s bin/generate-before.txt bin/generate-after.txt; then
+  echo "The generated files are out of date; run 'mise run generate' and commit the result:" >&2
+  diff bin/generate-before.txt bin/generate-after.txt >&2
+  exit 1
+fi
+""",
+]
+
+# golint-sl runs as a golangci-lint module plugin, so it has to be compiled into
+# a custom binary (./custom-gcl). Rebuilds only when .custom-gcl.yml changes.
+[tasks.lint-build]
+description = "Build the custom-gcl binary with the golint-sl plugin baked in"
+# The build downloads golangci-lint's whole dependency tree, and the module
+# proxy sometimes resets the HTTP/2 stream partway through. Modules already
+# downloaded stay in the cache, so a retry picks up where it failed.
+run = """
+for attempt in 1 2 3; do
+  golangci-lint custom && exit 0
+  echo "golangci-lint custom failed (attempt $attempt of 3)" >&2
+  sleep 10
+done
+exit 1
+"""
+sources = [".custom-gcl.yml"]
+outputs = ["custom-gcl"]
+
+[tasks.go-lint]
+description = "Lint the Go module with golangci-lint and golint-sl"
+depends = ["lint-build"]
+run = "./custom-gcl run ./..."
+
+[tasks.lint]
+description = "Lint the Go module with golangci-lint and golint-sl, YAML and workflows"
+depends = ["go-lint", "yaml-lint", "actionlint"]
+
+# The image builds the module as it is, so an untidy go.mod has to fail CI
+# rather than be fixed up at release time.
+[tasks.mod-tidy]
+description = "Check that go.mod and go.sum are tidy"
+run = "go mod tidy -diff"
+
+[tasks.yaml-lint]
+description = "Lint every YAML file in the repository"
+run = "yamllint --strict ."
+
+[tasks.actionlint]
+description = "Lint the GitHub Actions workflows"
+run = "actionlint"
+
+# The image CI builds and the release publishes, for the local platform. Needs
+# a Docker daemon, which mise doesn't provide.
+[tasks.image]
+description = "Build the container image for the local platform, tagged with the given name (default urlshortener:dev)"
+usage = 'arg "[image]" default="urlshortener:dev"'
+run = "docker build --tag ${usage_image} ."
+
+[tasks.check]
+description = "The definition of done: every gate CI runs on the Go code"
+depends = [
+  "lint",
+  "mod-tidy",
+  "generate-check",
+  "test",
+]
+
+[tasks.update-gha]
+description = "Pin GitHub Actions to commit SHAs (Renovate keeps them current afterwards)"
+run = "pinact run"

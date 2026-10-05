@@ -4,13 +4,21 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sierrasoftworks/humane-errors-go"
 	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
+// GitHubUserAuthMiddleware identifies the GitHub user whose token the request
+// carries, and stores their name as githubUserName in the gin context. A
+// request without a valid token is answered with 401.
 func GitHubUserAuthMiddleware() gin.HandlerFunc {
+	return gitHubUserAuth(gitHubUserURL)
+}
+
+func gitHubUserAuth(userURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		span := trace.SpanFromContext(ctx)
@@ -22,9 +30,9 @@ func GitHubUserAuthMiddleware() gin.HandlerFunc {
 
 		span.SetAttributes(attribute.String("referrer", c.Request.Referer()))
 
-		tokenString, err := extractBearerToken(c)
+		user, err := authenticate(c, userURL)
 		if err != nil {
-			otelzap.L().WithError(err).Ctx(ctx).Error(err.Error(),
+			otelzap.L().WithError(err).ErrorContext(ctx, err.Error(),
 				zap.String("shortlink", shortlinkName),
 				zap.String("method", c.Request.Method),
 			)
@@ -33,15 +41,17 @@ func GitHubUserAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if user, err := getGitHubUserInfo(ctx, tokenString); err != nil {
-			otelzap.L().WithError(err).Ctx(ctx).Error(err.Error(),
-				zap.String("shortlink", shortlinkName),
-				zap.String("method", c.Request.Method),
-			)
-		} else {
-			c.Set("githubUserName", user.Name)
-		}
-
+		c.Set("githubUserName", user.Name)
 		c.Next()
 	}
+}
+
+// authenticate returns the GitHub user whose token the request carries.
+func authenticate(c *gin.Context, userURL string) (*GithubUser, humane.Error) {
+	tokenString, err := extractBearerToken(c)
+	if err != nil {
+		return nil, err
+	}
+
+	return getGitHubUserInfo(c.Request.Context(), userURL, tokenString)
 }

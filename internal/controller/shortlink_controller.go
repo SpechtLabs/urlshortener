@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -41,9 +40,9 @@ type ShortlinkReconciler struct {
 }
 
 // NewShortLinkReconciler returns a new ShortLinkReconciler
-func NewShortLinkReconciler(client client.Client, scheme *runtime.Scheme) *ShortlinkReconciler {
+func NewShortLinkReconciler(k8sClient client.Client, scheme *runtime.Scheme) *ShortlinkReconciler {
 	return &ShortlinkReconciler{
-		client: shortlinkclient.NewShortlinkClient(client),
+		client: shortlinkclient.NewShortlinkClient(k8sClient),
 		scheme: scheme,
 	}
 }
@@ -63,10 +62,7 @@ func NewShortLinkReconciler(client client.Client, scheme *runtime.Scheme) *Short
 func (r *ShortlinkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	span := trace.SpanFromContext(ctx)
 
-	startTime := time.Now()
-	defer func() {
-		reconcilerDuration.WithLabelValues("shortlink", req.Name, req.Namespace).Observe(float64(time.Since(startTime).Microseconds()))
-	}()
+	defer timeReconcile("shortlink", req).ObserveDuration()
 
 	span.SetAttributes(attribute.String("shortlink", req.Name))
 
@@ -74,12 +70,12 @@ func (r *ShortlinkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	shortlink, err := r.client.GetNamespaced(ctx, req.NamespacedName)
 	if err != nil || shortlink == nil {
 		if errors.IsNotFound(err) {
-			otelzap.L().WithError(err).Ctx(ctx).Info("Shortlink resource not found. Ignoring since object must be deleted",
+			otelzap.L().WithError(err).DebugContext(ctx, "Shortlink resource not found. Ignoring since object must be deleted",
 				zap.String("name", "reconciler"),
 				zap.String("shortlink", req.String()),
 			)
 		} else {
-			otelzap.L().WithError(err).Ctx(ctx).Error("Failed to fetch ShortLink resource",
+			otelzap.L().WithError(err).ErrorContext(ctx, "Failed to fetch ShortLink resource",
 				zap.String("name", "reconciler"),
 				zap.String("shortlink", req.String()),
 			)

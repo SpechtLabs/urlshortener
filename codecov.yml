@@ -1,0 +1,22 @@
+# Codecov fails a pull request when the lines it changes are less than 85%
+# covered, or when it lowers the project's coverage. The project target follows
+# the base branch (auto) rather than a fixed 85%, because the HTTP server and
+# its Kubernetes client had no tests before; raise it to 85% once the project
+# gets there.
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 85%
+
+# The scaffolded e2e harness runs against a kind cluster, not in the unit
+# tests, and the generated OpenAPI package and deepcopy methods aren't
+# written by hand.
+ignore:
+  - "test/**"
+  - "docs/**"
+  - "**/zz_generated.*.go"

@@ -7,13 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sierrasoftworks/humane-errors-go"
-
-	"github.com/spechtlabs/go-otel-utils/otelzap"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
@@ -43,57 +38,36 @@ func (s *UrlshortenerServer) HandleCreateShortLink(ct *gin.Context) {
 	shortlinkName := ct.Param("shortlink")
 	userName := ct.GetString("githubUserName")
 
-	ctx := ct.Request.Context()
-	span := trace.SpanFromContext(ctx)
-
+	span := trace.SpanFromContext(ct.Request.Context())
 	span.SetAttributes(attribute.String("shortlink", shortlinkName), attribute.String("referrer", ct.Request.Referer()))
 
 	if len(userName) == 0 {
-		err := humane.New("No user found for request",
-			"ensure you include a Bearer token in the Authorization header, e.g. Authorization: Bearer <token> or Authorization: token <token>",
-		)
-
-		otelzap.L().WithError(err).Ctx(ctx).Error(err.Error(),
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "create"),
-		)
-
-		ct.JSON(http.StatusUnauthorized, gin.H{"error": err.Error(), "advice": err.Advice()})
+		abortWithError(ct, http.StatusUnauthorized, operationCreate, newNoUserError())
 		return
 	}
 
 	jsonData, err := io.ReadAll(ct.Request.Body)
 	if err != nil {
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to read request-body",
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "create"),
-		)
-		ct.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		abortWithError(ct, http.StatusInternalServerError, operationCreate, humane.Wrap(err, "Failed to read request-body",
+			"Send the ShortLink spec as the JSON body of the request",
+		))
 		return
 	}
 
 	shortlink := v1alpha1.Shortlink{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: shortlinkName,
-		},
+		Name: shortlinkName,
 		Spec: v1alpha1.ShortlinkSpec{},
 	}
 
 	if err := json.Unmarshal(jsonData, &shortlink.Spec); err != nil {
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to read spec-json",
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "create"),
-		)
-		ct.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		abortWithError(ct, http.StatusInternalServerError, operationCreate, humane.Wrap(err, "Failed to read spec-json",
+			"Send the ShortLink spec as the JSON body of the request, e.g. {\"target\": \"https://example.com\"}",
+		))
 		return
 	}
 
-	if err := s.userClient.Create(ctx, userName, &shortlink); err != nil {
-		otelzap.L().WithError(err).Ctx(ctx).Error("Failed to create ShortLink",
-			zap.String("shortlink", shortlinkName),
-			zap.String("operation", "create"),
-		)
-		ct.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := s.userClient.Create(ct.Request.Context(), userName, &shortlink); err != nil {
+		abortWithError(ct, http.StatusInternalServerError, operationCreate, err)
 		return
 	}
 

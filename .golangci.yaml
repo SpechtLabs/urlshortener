@@ -1,0 +1,144 @@
+# golangci-lint configuration for urlshortener.
+#
+# golint-sl runs as a module plugin baked into ./custom-gcl (see .custom-gcl.yml).
+# The prebuilt golangci-lint cannot load the plugin, so run it with
+# `mise run lint`, which builds custom-gcl and runs it.
+# https://golangci-lint.run/usage/configuration/
+
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+  modules-download-mode: readonly
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  enable:
+    # Default linters
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+    # Additional recommended linters
+    - dogsled
+    - copyloopvar
+    - ginkgolinter
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - goprintffuncname
+    - gosec
+    - misspell
+    - modernize
+    - nakedret
+    - nolintlint
+    - prealloc
+    - revive
+    - rowserrcheck
+    - whitespace
+    - unconvert
+    - unparam
+
+    # golint-sl: production-ready Go patterns (error handling, observability, safety)
+    # https://golint.specht-labs.de/
+    - golint-sl
+
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    govet:
+      enable-all: true
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+    custom:
+      golint-sl:
+        type: module
+        description: SpechtLabs Go linter collection for production-ready code
+        original-url: github.com/spechtlabs/golint-sl
+
+  exclusions:
+    generated: lax
+    rules:
+      # Hold test files to a lighter bar than production code.
+      - linters:
+          - gosec
+          - goconst
+          - golint-sl
+        path: _test\.go
+
+      # test/ is kubebuilder's e2e harness: it drives kind, kubectl and make
+      # style tasks as subprocesses from the commands it builds, and its
+      # helpers return the subprocesses' errors to Ginkgo assertions.
+      - linters:
+          - gosec
+          - golint-sl
+        path: ^test/
+
+      - linters:
+          - govet
+        text: "^shadow:"
+        path: ^test/
+
+      # Test tables are laid out for reading, not for size.
+      - linters:
+          - govet
+        text: "^fieldalignment:"
+        path: _test\.go
+
+      # The CRD types keep kubebuilder's order (TypeMeta, ObjectMeta, Spec,
+      # Status) and the order their fields read in the schema. They're decoded
+      # per request, not kept in bulk, so their size doesn't matter.
+      - linters:
+          - govet
+        text: "^fieldalignment:"
+        path: ^api/
+
+      # Start implements controller-runtime's manager.Runnable: its signature
+      # returns error (the errors it returns are humane), and the manager stops
+      # it by cancelling its context, which is the graceful shutdown.
+      - linters:
+          - golint-sl
+        text: '^(humaneerror: exported function "Start" returns plain .error.|lifecycle: type "UrlshortenerServer" has Run\(\) method)'
+        path: ^pkg/api/router\.go$
+
+      # Start runs for the life of the process, outside any request, so there
+      # is no span in its context to annotate.
+      - linters:
+          - golint-sl
+        text: "^wideevents: function has context.Context but doesn't use span attributes"
+        path: ^pkg/api/router\.go$
+
+      # contextlogger matches otelzap.L() as zap.L(). otelzap's *Context
+      # methods, which every log call here uses, take the trace and span from
+      # the context they're given.
+      - linters:
+          - golint-sl
+        text: "^contextlogger: function has context parameter but uses global logger"
+
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -28,4 +28,3 @@ resources:
 - redirect_admin_role.yaml
 - redirect_editor_role.yaml
 - redirect_viewer_role.yaml
-

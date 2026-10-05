@@ -3,26 +3,32 @@ package client
 import (
 	"context"
 
-	"github.com/spechtlabs/urlshortener/api/v1alpha1"
+	"github.com/sierrasoftworks/humane-errors-go"
 	"go.opentelemetry.io/otel"
-
-	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/spechtlabs/urlshortener/api/v1alpha1"
 )
 
+// UserShortLinkClient acts on ShortLinks on behalf of a GitHub user, who may
+// only see and change the ShortLinks they own or co-own.
 type UserShortLinkClient struct {
 	tracer trace.Tracer
 	client *ShortlinkClient
 }
 
-func NewUserShortLinkClient(client *ShortlinkClient) *UserShortLinkClient {
+// NewUserShortLinkClient returns a UserShortLinkClient that reads and writes
+// through shortlinkClient.
+func NewUserShortLinkClient(shortlinkClient *ShortlinkClient) *UserShortLinkClient {
 	return &UserShortLinkClient{
 		tracer: otel.Tracer("urlshortener"),
-		client: client,
+		client: shortlinkClient,
 	}
 }
 
-func (c *UserShortLinkClient) List(ct context.Context, username string) (*v1alpha1.ShortlinkList, error) {
+// List returns the ShortLinks in the current namespace that username owns or
+// co-owns.
+func (c *UserShortLinkClient) List(ct context.Context, username string) (*v1alpha1.ShortlinkList, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.List")
 	defer span.End()
 
@@ -50,13 +56,15 @@ func (c *UserShortLinkClient) List(ct context.Context, username string) (*v1alph
 	return &userShortlinkList, nil
 }
 
-func (c *UserShortLinkClient) Get(ct context.Context, username string, name string) (*v1alpha1.Shortlink, error) {
+// Get returns the ShortLink name in the current namespace, if username owns or
+// co-owns it.
+func (c *UserShortLinkClient) Get(ct context.Context, username string, name string) (*v1alpha1.Shortlink, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Get")
 	defer span.End()
 
 	shortLink, err := c.client.Get(ctx, name)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to get shortlink")
+		return nil, err
 	}
 
 	if !shortLink.IsOwnedBy(username) {
@@ -66,7 +74,8 @@ func (c *UserShortLinkClient) Get(ct context.Context, username string, name stri
 	return shortLink, nil
 }
 
-func (c *UserShortLinkClient) Create(ct context.Context, username string, shortLink *v1alpha1.Shortlink) error {
+// Create creates shortLink with username as its owner.
+func (c *UserShortLinkClient) Create(ct context.Context, username string, shortLink *v1alpha1.Shortlink) humane.Error {
 	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Create")
 	defer span.End()
 
@@ -74,7 +83,9 @@ func (c *UserShortLinkClient) Create(ct context.Context, username string, shortL
 	return c.client.Create(ctx, shortLink)
 }
 
-func (c *UserShortLinkClient) Update(ct context.Context, username string, shortLink *v1alpha1.Shortlink) error {
+// Update writes shortLink, if username owns or co-owns it, and records
+// username as the one who changed it last.
+func (c *UserShortLinkClient) Update(ct context.Context, username string, shortLink *v1alpha1.Shortlink) humane.Error {
 	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Update")
 	defer span.End()
 
@@ -90,8 +101,9 @@ func (c *UserShortLinkClient) Update(ct context.Context, username string, shortL
 	return c.client.UpdateStatus(ctx, shortLink)
 }
 
-func (c *UserShortLinkClient) Delete(ct context.Context, username string, shortLink *v1alpha1.Shortlink) error {
-	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Update")
+// Delete deletes shortLink, if username owns or co-owns it.
+func (c *UserShortLinkClient) Delete(ct context.Context, username string, shortLink *v1alpha1.Shortlink) humane.Error {
+	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.Delete")
 	defer span.End()
 
 	if !shortLink.IsOwnedBy(username) {

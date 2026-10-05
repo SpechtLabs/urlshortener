@@ -81,7 +81,3 @@ type RedirectList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Redirect `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&Redirect{}, &RedirectList{})
-}

@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag whose image to publish again (e.g. v0.2.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  id-token: write
+  packages: write
+  pull-requests: write
+
+# Never cancel a release half-way: that can leave a tag published with no
+# image. Pushes key on the SHA so each commit gets its own run; repairs key
+# on the tag so two repairs of the same tag cannot race. Only the gate job
+# below cancels anything, and only an older gate.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  # The gate: lint, generated files and tests for what the image is built
+  # from. The image build itself ran on the pull request; ci.yaml has it.
+  #
+  # A push to main that lands while an older push is still in its gate
+  # cancels that gate: the older run then skips release-please and the
+  # image, which would only find that main has moved on. Nothing after the
+  # gate is in the group, so a run that got past its gate publishes to the
+  # end. Repairs never cancel.
+  go:
+    name: Go
+    uses: ./.github/workflows/go.yaml
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    concurrency:
+      group: ${{ github.workflow }}-gate-go-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
+
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    needs:
+      - go
+    if: github.event_name == 'push'
+    steps:
+      # Renovate automerges in quick succession. A run whose commit is no longer
+      # main's tip leaves release-please, and the main image, to the newer run,
+      # so a stale run can neither rewrite the release PR behind a newer one
+      # nor move the main tag back to an older commit.
+      - name: Refuse to act unless this run's head is still main's tip
+        id: still-current
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tip="$(gh api "repos/${{ github.repository }}/commits/main" --jq .sha)"
+          if [ "$tip" = "${{ github.sha }}" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::main has moved to $tip since this run started at ${{ github.sha }}; leaving release-please to that run."
+          fi
+
+      # GitHub doesn't start workflows for what GITHUB_TOKEN does: a release
+      # pull request it opens or updates gets a CI run that waits for
+      # approval. RELEASE_PLEASE_TOKEN, a fine-grained personal access token
+      # with read and write access to this repository's contents, pull
+      # requests and issues, makes the pull request an ordinary one whose CI
+      # runs. Without the secret, release-please falls back to GITHUB_TOKEN.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release-please
+        if: steps.still-current.outputs.current == 'true'
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+    outputs:
+      current: ${{ steps.still-current.outputs.current }}
+      release_created: ${{ steps.release-please.outputs.release_created }}
+      tag_name: ${{ steps.release-please.outputs.tag_name }}
+
+  # Every commit on main is published as the main tag, which the cluster
+  # deploys, and as sha-<commit>. A release is cut by merging the release
+  # pull request, so the commit that merge creates is the tagged one, and its
+  # image also gets the version (0.2.0 and v0.2.0, the chart's appVersion
+  # and the Git tag) and latest.
+  #
+  # A repair (workflow_dispatch) builds the given tag again and pushes its
+  # version tags only, so it never moves main or latest.
+  image:
+    name: Image
+    needs:
+      - go
+      - release-please
+    if: >-
+      always() &&
+      needs.go.result == 'success' &&
+      (
+        (github.event_name == 'push' && needs.release-please.outputs.current == 'true') ||
+        github.event_name == 'workflow_dispatch'
+      )
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/image.yaml
+    with:
+      push: true
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.sha }}
+      tags: |
+        type=raw,value=main,enable=${{ github.event_name == 'push' }}
+        type=sha,format=long,enable=${{ github.event_name == 'push' }}
+        type=semver,pattern={{version}},value=${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release-please.outputs.tag_name }},enable=${{ github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true' }}
+        type=semver,pattern=v{{version}},value=${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release-please.outputs.tag_name }},enable=${{ github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true' }}
+        type=raw,value=latest,enable=${{ github.event_name == 'push' && needs.release-please.outputs.release_created == 'true' }}
