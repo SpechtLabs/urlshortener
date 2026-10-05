@@ -105,6 +105,14 @@ linters:
         text: "^fieldalignment:"
         path: ^api/
 
+      # addKnownTypes is only called by runtime.SchemeBuilder, with the scheme
+      # AddToScheme was given; a nil scheme is the caller's bug, and the API
+      # package keeps to apimachinery's dependencies, so no humane error.
+      - linters:
+          - golint-sl
+        text: '^nilcheck: pointer parameter "scheme"'
+        path: ^api/v1alpha1/groupversion_info\.go$
+
       # Start implements controller-runtime's manager.Runnable: its signature
       # returns error (the errors it returns are humane), and the manager stops
       # it by cancelling its context, which is the graceful shutdown.
