@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -130,7 +131,7 @@ func TestHandleListShortLink(t *testing.T) {
 	}{
 		{name: "lists the user's shortlinks", user: "octocat", wantStatus: http.StatusOK, wantNames: []string{"home"}},
 		{name: "without a user", wantStatus: http.StatusUnauthorized},
-		{name: "a user who owns none", user: "nobody", wantStatus: http.StatusInternalServerError},
+		{name: "a user who owns none", user: "nobody", wantStatus: http.StatusOK, wantNames: []string{}},
 	}
 
 	for _, tt := range tests {
@@ -155,8 +156,13 @@ func TestHandleListShortLink(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if len(got) != len(tt.wantNames) || got[0].Name != tt.wantNames[0] {
-				t.Errorf("listed %+v, want %v", got, tt.wantNames)
+			names := make([]string, 0, len(got))
+			for _, shortlink := range got {
+				names = append(names, shortlink.Name)
+			}
+
+			if !slices.Equal(names, tt.wantNames) {
+				t.Errorf("listed %v, want %v", names, tt.wantNames)
 			}
 		})
 	}

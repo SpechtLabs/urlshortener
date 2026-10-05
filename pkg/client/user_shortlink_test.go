@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,7 +21,7 @@ func TestUserShortLinkClientList(t *testing.T) {
 		wantErr   bool
 	}{
 		{name: "owned and co-owned", user: "octocat", file: namespaceFile(t), wantNames: []string{"blog", "home"}},
-		{name: "owns nothing", user: "nobody", file: namespaceFile(t), wantErr: true},
+		{name: "owns nothing", user: "nobody", file: namespaceFile(t), wantNames: []string{}},
 		{name: "outside a pod", user: "octocat", file: filepath.Join(t.TempDir(), "missing"), wantErr: true},
 	}
 
@@ -45,7 +46,7 @@ func TestUserShortLinkClientList(t *testing.T) {
 				names = append(names, item.Name)
 			}
 
-			if len(names) != len(tt.wantNames) || names[0] != tt.wantNames[0] || names[1] != tt.wantNames[1] {
+			if !slices.Equal(names, tt.wantNames) {
 				t.Errorf("List() = %v, want %v", names, tt.wantNames)
 			}
 		})

@@ -27,7 +27,7 @@ func NewUserShortLinkClient(shortlinkClient *ShortlinkClient) *UserShortLinkClie
 }
 
 // List returns the ShortLinks in the current namespace that username owns or
-// co-owns.
+// co-owns, which may be none.
 func (c *UserShortLinkClient) List(ct context.Context, username string) (*v1alpha1.ShortlinkList, humane.Error) {
 	ctx, span := c.tracer.Start(ct, "UserShortLinkClient.List")
 	defer span.End()
@@ -47,10 +47,6 @@ func (c *UserShortLinkClient) List(ct context.Context, username string) (*v1alph
 		if shortLink.IsOwnedBy(username) {
 			userShortlinkList.Items = append(userShortlinkList.Items, shortLink)
 		}
-	}
-
-	if len(userShortlinkList.Items) == 0 {
-		return nil, NewNotAllowedError(username, ReadOperation, "all shortlinks")
 	}
 
 	return &userShortlinkList, nil
