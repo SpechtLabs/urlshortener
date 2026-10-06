@@ -118,7 +118,7 @@ linters:
       # it by cancelling its context, which is the graceful shutdown.
       - linters:
           - golint-sl
-        text: '^(humaneerror: exported function "Start" returns plain .error.|lifecycle: type "UrlshortenerServer" has Run\(\) method)'
+        text: '^(humaneerror: exported function "Start" returns plain .error.|lifecycle: type "UrlshortenerServer" has (Run|Start)\(\) method)'
         path: ^pkg/api/router\.go$
 
       # Start runs for the life of the process, outside any request, so there
