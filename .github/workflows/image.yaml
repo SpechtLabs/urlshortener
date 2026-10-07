@@ -28,7 +28,7 @@ env:
   IMAGE: ghcr.io/spechtlabs/urlshortener
   # mise itself, pinned; go.yaml explains why.
   # renovate: datasource=github-releases depName=jdx/mise extractVersion=^v(?<version>.+)$
-  MISE_VERSION: 2026.10.2
+  MISE_VERSION: 2026.10.3
 
 jobs:
   image:
