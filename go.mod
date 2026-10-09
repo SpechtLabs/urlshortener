@@ -9,7 +9,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/onsi/ginkgo/v2 v2.33.0
 	github.com/onsi/gomega v1.44.0
-	github.com/prometheus/client_golang v1.24.1
+	github.com/prometheus/client_golang v1.25.0
 	github.com/sierrasoftworks/humane-errors-go v0.0.0-20260820132314-9a466da5e0f0
 	github.com/spechtlabs/go-gin-prometheus v0.1.2
 	github.com/spechtlabs/go-otel-utils/otelprovider v0.2.3
