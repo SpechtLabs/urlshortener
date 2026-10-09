@@ -35,7 +35,7 @@ shellcheck = "0.11.0"
 setup-envtest = "0.25.2"
 # Deploying to a cluster and the e2e suite (see the install, deploy and
 # test-e2e tasks), which run against the cluster of the current kube context.
-kustomize = "5.8.2"
+kustomize = "5.8.3"
 kubectl = "1.37.1"
 kind = "0.33.0"
 
