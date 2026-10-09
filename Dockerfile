@@ -4,7 +4,7 @@
 #   docker build -t urlshortener:dev .    (or: mise run image)
 
 # Keep in lockstep with go in .mise.toml; Renovate bumps both together.
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27.1 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27.2 AS builder
 
 WORKDIR /src
 
