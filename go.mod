@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/contrib v0.0.0-20260101091603-d12f07a9136b
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-logr/zapr v1.3.0
-	github.com/onsi/ginkgo/v2 v2.33.0
+	github.com/onsi/ginkgo/v2 v2.33.1
 	github.com/onsi/gomega v1.44.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/sierrasoftworks/humane-errors-go v0.0.0-20260820132314-9a466da5e0f0
