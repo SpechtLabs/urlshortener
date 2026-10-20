@@ -41,7 +41,7 @@ kind = "0.33.0"
 
 # Signs the container images the release workflow publishes (keyless, through
 # the workflow's OIDC identity).
-cosign = "3.1.3"
+cosign = "3.1.4"
 
 # Pins GitHub Actions to commit SHAs (see the update-gha task)
 pinact = "5.0.0"
