@@ -44,7 +44,7 @@ kind = "0.33.0"
 cosign = "3.1.4"
 
 # Pins GitHub Actions to commit SHAs (see the update-gha task)
-pinact = "5.0.0"
+pinact = "5.0.1"
 
 # Runs the commit message check in .github/commit-lint (pr-hygiene.yaml).
 bun = "1.4.3"
