@@ -36,7 +36,7 @@ setup-envtest = "0.25.2"
 # Deploying to a cluster and the e2e suite (see the install, deploy and
 # test-e2e tasks), which run against the cluster of the current kube context.
 kustomize = "5.8.3"
-kubectl = "1.37.1"
+kubectl = "1.37.2"
 kind = "0.33.0"
 
 # Signs the container images the release workflow publishes (keyless, through
