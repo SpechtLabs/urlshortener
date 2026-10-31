@@ -3,7 +3,7 @@ module github.com/spechtlabs/urlshortener
 go 1.27.1
 
 require (
-	github.com/gin-contrib/zap v1.1.9
+	github.com/gin-contrib/zap v1.1.10
 	github.com/gin-gonic/contrib v0.0.0-20260101091603-d12f07a9136b
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-logr/zapr v1.3.0
