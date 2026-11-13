@@ -31,7 +31,7 @@ shellcheck = "0.11.0"
 # methods, the CRDs and the RBAC role (see the generate task), and
 # setup-envtest fetches the kube-apiserver and etcd the controller tests run
 # against (see the test task).
-"github:kubernetes-sigs/controller-tools" = { version = "0.22.0", bin = "controller-gen" }
+"github:kubernetes-sigs/controller-tools" = { version = "0.23.0", bin = "controller-gen" }
 setup-envtest = "0.25.2"
 # Deploying to a cluster and the e2e suite (see the install, deploy and
 # test-e2e tasks), which run against the cluster of the current kube context.
