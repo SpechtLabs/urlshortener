@@ -32,7 +32,7 @@ shellcheck = "0.11.0"
 # setup-envtest fetches the kube-apiserver and etcd the controller tests run
 # against (see the test task).
 "github:kubernetes-sigs/controller-tools" = { version = "0.22.0", bin = "controller-gen" }
-setup-envtest = "0.25.2"
+setup-envtest = "0.25.3"
 # Deploying to a cluster and the e2e suite (see the install, deploy and
 # test-e2e tasks), which run against the cluster of the current kube context.
 kustomize = "5.8.3"
